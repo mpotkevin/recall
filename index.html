@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>延遲記憶王 - 職能治療師 鄭凱文設計</title>
     <!-- React & Babel CDN -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
@@ -14,16 +14,32 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; }
-        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-12px); } 75% { transform: translateX(12px); } }
+        body { 
+            font-family: 'Noto Sans TC', sans-serif; 
+            overscroll-behavior-y: contain; /* 防止手機瀏覽器下拉刷新影響遊戲體驗 */
+        }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
         .shake { animation: shake 0.2s cubic-bezier(.36,.07,.19,.97) both; }
-        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+
+        /* 確保全螢幕高度且不產生全頁滾動 */
+        .app-container {
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .main-content {
+            flex: 1;
+            overflow-y: auto;
+            padding-bottom: 20px;
+        }
     </style>
 </head>
-<body class="bg-slate-50">
+<body class="bg-slate-50 text-slate-800 antialiased">
     <div id="root"></div>
 
     <script type="text/babel">
@@ -128,10 +144,6 @@
                     reactionTimes: [], lastActionTime: 0
                 });
                 setShowAbortModal(false);
-            };
-
-            const confirmAbort = () => {
-                setShowAbortModal(true);
             };
 
             const startGame = () => {
@@ -298,7 +310,6 @@
                 score: score, targets: targets, stats: stats, config: config, selections: selections, date: new Date().toLocaleString()
             };
 
-            // 反應時間計算輔助 (ms -> s)
             const getAverageReactionTime = (rTimes) => {
                 if (!rTimes || rTimes.length === 0) return "0.000";
                 const avgMs = rTimes.reduce((a, b) => a + b, 0) / rTimes.length;
@@ -306,285 +317,298 @@
             };
 
             return (
-                <div className="min-h-screen p-2 md:p-8">
-                    <div className="max-w-3xl mx-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden relative border border-slate-100">
-                        
-                        {/* Header */}
-                        <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center">
-                            <div className="flex items-center gap-3">
-                                <div className="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
-                                    <Icon name="brain" />
-                                </div>
-                                <div>
-                                    <h1 className="text-2xl font-black tracking-tight text-slate-900">延遲記憶王</h1>
-                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cognitive Mastery Pro</p>
-                                </div>
+                <div className="app-container">
+                    {/* Header - 固定 */}
+                    <header className="bg-white border-b border-slate-100 p-4 md:p-6 flex justify-between items-center shrink-0 shadow-sm z-10">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-indigo-600 rounded-xl text-white shadow-md">
+                                <Icon name="brain" size={24} />
                             </div>
-                            <div className="flex gap-2">
-                                {(stage === STAGES.MEMORIZE || stage === STAGES.DISTRACT || stage === STAGES.RECALL) && (
-                                    <button onClick={confirmAbort} className="flex items-center gap-2 bg-red-50 text-red-500 hover:bg-red-100 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-red-100 mr-2 shadow-sm">
-                                        <Icon name="octagon-x" size={20} /> 中斷訓練
-                                    </button>
-                                )}
-                                <button onClick={() => setStage(STAGES.HISTORY)} className="p-2.5 bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-all border border-slate-100">
-                                    <Icon name="history" size={22} />
-                                </button>
-                                <button onClick={() => setShowPool(true)} className="flex items-center gap-2 bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-slate-100">
-                                    <Icon name="package" size={20} /> 管理題庫
-                                </button>
+                            <div>
+                                <h1 className="text-xl md:text-2xl font-black tracking-tight text-slate-900">延遲記憶王</h1>
+                                <p className="hidden md:block text-[10px] font-bold text-slate-400 uppercase tracking-widest">Cognitive Mastery Pro</p>
                             </div>
                         </div>
+                        <div className="flex gap-2">
+                            {(stage === STAGES.MEMORIZE || stage === STAGES.DISTRACT || stage === STAGES.RECALL) && (
+                                <button onClick={() => setShowAbortModal(true)} className="flex items-center gap-1 bg-red-50 text-red-500 hover:bg-red-100 px-3 py-2 rounded-xl text-xs font-bold border border-red-100 transition-all">
+                                    <Icon name="octagon-x" size={16} /> 中斷
+                                </button>
+                            )}
+                            <button onClick={() => setStage(STAGES.HISTORY)} className="p-2 bg-slate-50 text-slate-500 hover:bg-indigo-50 rounded-xl border border-slate-100">
+                                <Icon name="history" size={20} />
+                            </button>
+                            <button onClick={() => setShowPool(true)} className="flex items-center gap-2 bg-slate-50 text-slate-500 hover:bg-indigo-50 px-3 py-2 rounded-xl text-xs font-bold border border-slate-100">
+                                <Icon name="package" size={18} /> 管理題庫
+                            </button>
+                        </div>
+                    </header>
 
-                        <div className="p-6 md:p-10">
+                    {/* Main Content - 可滾動 */}
+                    <main className="main-content custom-scrollbar px-4 md:px-10 py-6">
+                        <div className="max-w-3xl mx-auto w-full">
+                            
                             {stage === STAGES.START && (
                                 <div className="animate-in fade-in zoom-in duration-500 text-center">
-                                    <div className="mb-10">
-                                        <div className="inline-block mb-4 px-4 py-1 bg-indigo-50 text-indigo-600 rounded-full text-sm font-black">DAILY TRAINING</div>
-                                        <h2 className="text-4xl font-black text-slate-900 mb-2">準備開始訓練</h2>
-                                        <p className="text-slate-400">客製化您的認知挑戰模式</p>
+                                    <div className="mb-8">
+                                        <div className="inline-block mb-3 px-3 py-0.5 bg-indigo-50 text-indigo-600 rounded-full text-[10px] font-black tracking-widest">DAILY TRAINING</div>
+                                        <h2 className="text-3xl md:text-4xl font-black text-slate-900 mb-2">訓練大腦</h2>
+                                        <p className="text-slate-400 text-sm">職能治療專業認知強化系統</p>
                                     </div>
-                                    <div className="space-y-4 mb-10 max-w-xl mx-auto">
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center">
-                                                <div className="flex items-center gap-2 mb-4 text-indigo-500"><Icon name="target" size={20} /><span className="text-sm font-black text-slate-500 uppercase">物品記憶</span></div>
-                                                <div className="flex items-center gap-5">
-                                                    <button onClick={() => updateConfig('targetCount', Math.max(1, config.targetCount - 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="minus" size={18} /></button>
-                                                    <span className="text-xl font-black min-w-[32px] text-center">{config.targetCount}</span>
-                                                    <button onClick={() => updateConfig('targetCount', Math.min(10, config.targetCount + 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="plus" size={18} /></button>
+
+                                    <div className="space-y-4 mb-10">
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="bg-white p-4 rounded-3xl border-2 border-slate-100 flex flex-col items-center shadow-sm">
+                                                <div className="flex items-center gap-2 mb-3 text-indigo-500"><Icon name="target" size={18} /><span className="text-xs font-black text-slate-400">物品數量</span></div>
+                                                <div className="flex items-center gap-4">
+                                                    <button onClick={() => updateConfig('targetCount', Math.max(1, config.targetCount - 1))} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center active:scale-90"><Icon name="minus" size={14} /></button>
+                                                    <span className="text-2xl font-black">{config.targetCount}</span>
+                                                    <button onClick={() => updateConfig('targetCount', Math.min(10, config.targetCount + 1))} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center active:scale-90"><Icon name="plus" size={14} /></button>
                                                 </div>
                                             </div>
-                                            <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center">
-                                                <div className="flex items-center gap-2 mb-4 text-amber-500"><Icon name="layers" size={20} /><span className="text-sm font-black text-slate-500 uppercase">回憶混淆</span></div>
-                                                <div className="flex items-center gap-5">
-                                                    <button onClick={() => updateConfig('recallDistractorCount', Math.max(0, config.recallDistractorCount - 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="minus" size={18} /></button>
-                                                    <span className="text-xl font-black min-w-[32px] text-center">{config.recallDistractorCount}</span>
-                                                    <button onClick={() => updateConfig('recallDistractorCount', Math.min(15, config.recallDistractorCount + 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="plus" size={18} /></button>
+                                            <div className="bg-white p-4 rounded-3xl border-2 border-slate-100 flex flex-col items-center shadow-sm">
+                                                <div className="flex items-center gap-2 mb-3 text-amber-500"><Icon name="layers" size={18} /><span className="text-xs font-black text-slate-400">混淆數量</span></div>
+                                                <div className="flex items-center gap-4">
+                                                    <button onClick={() => updateConfig('recallDistractorCount', Math.max(0, config.recallDistractorCount - 1))} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center active:scale-90"><Icon name="minus" size={14} /></button>
+                                                    <span className="text-2xl font-black">{config.recallDistractorCount}</span>
+                                                    <button onClick={() => updateConfig('recallDistractorCount', Math.min(15, config.recallDistractorCount + 1))} className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center active:scale-90"><Icon name="plus" size={14} /></button>
                                                 </div>
                                             </div>
                                         </div>
 
-                                        <div className="bg-slate-50/50 p-6 rounded-[2rem] border-2 border-slate-100">
-                                            <div className="flex justify-between items-center mb-5">
-                                                <div className="flex items-center gap-2"><Icon name="zap" size={18} className="text-indigo-600" /><span className="text-lg font-black text-slate-700">任務切換模式</span></div>
-                                                <div className="flex bg-slate-200 p-1 rounded-xl">
-                                                    <button onClick={() => updateConfig('distractorMode', 'count')} className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'count' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-50'}`}>次數達標</button>
-                                                    <button onClick={() => updateConfig('distractorMode', 'time')} className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'time' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>計時挑戰</button>
+                                        <div className="bg-white p-5 rounded-3xl border-2 border-slate-100 shadow-sm text-left">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <div className="flex items-center gap-2"><Icon name="zap" size={16} className="text-indigo-600" /><span className="text-sm font-black">任務切換模式</span></div>
+                                                <div className="flex bg-slate-100 p-1 rounded-lg">
+                                                    <button onClick={() => updateConfig('distractorMode', 'count')} className={`px-3 py-1 rounded font-bold text-[10px] transition-all ${config.distractorMode === 'count' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>次數</button>
+                                                    <button onClick={() => updateConfig('distractorMode', 'time')} className={`px-3 py-1 rounded font-bold text-[10px] transition-all ${config.distractorMode === 'time' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-400'}`}>計時</button>
                                                 </div>
                                             </div>
-                                            <div className="flex items-center justify-center py-2">
-                                                <div className="flex items-center gap-8">
-                                                    <span className="text-sm font-bold text-slate-400 uppercase">{config.distractorMode === 'count' ? '目標正確題數' : '挑戰秒數'}</span>
-                                                    <div className="flex items-center gap-5">
-                                                        <button onClick={() => config.distractorMode === 'count' ? updateConfig('distractorTarget', Math.max(1, config.distractorTarget - 1)) : updateConfig('distractorDuration', Math.max(10, config.distractorDuration - 10))} className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 active:scale-90"><Icon name="minus" size={20} /></button>
-                                                        <span className="text-3xl font-black min-w-[50px] text-center text-indigo-700">{config.distractorMode === 'count' ? config.distractorTarget : config.distractorDuration}</span>
-                                                        <button onClick={() => config.distractorMode === 'count' ? updateConfig('distractorTarget', Math.min(50, config.distractorTarget + 1)) : updateConfig('distractorDuration', Math.min(120, config.distractorDuration + 10))} className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 active:scale-90"><Icon name="plus" size={20} /></button>
-                                                    </div>
+                                            <div className="flex items-center justify-center gap-6">
+                                                <span className="text-xs font-bold text-slate-400 uppercase tracking-tighter">{config.distractorMode === 'count' ? '目標答對題數' : '挑戰總秒數'}</span>
+                                                <div className="flex items-center gap-4">
+                                                    <button onClick={() => config.distractorMode === 'count' ? updateConfig('distractorTarget', Math.max(1, config.distractorTarget - 1)) : updateConfig('distractorDuration', Math.max(10, config.distractorDuration - 10))} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 active:scale-90"><Icon name="minus" size={16} /></button>
+                                                    <span className="text-2xl font-black text-indigo-700 min-w-[40px] text-center">{config.distractorMode === 'count' ? config.distractorTarget : config.distractorDuration}</span>
+                                                    <button onClick={() => config.distractorMode === 'count' ? updateConfig('distractorTarget', Math.min(50, config.distractorTarget + 1)) : updateConfig('distractorDuration', Math.min(120, config.distractorDuration + 10))} className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-400 active:scale-90"><Icon name="plus" size={16} /></button>
                                                 </div>
                                             </div>
                                         </div>
-                                        <button onClick={() => updateConfig('showIcons', !config.showIcons)} className={`w-full p-5 rounded-[2rem] border-2 transition-all flex items-center justify-between ${config.showIcons ? 'bg-indigo-50/50 border-indigo-100 text-indigo-700' : 'bg-slate-50/50 border-slate-100 text-slate-400'}`}>
-                                            <div className="flex items-center gap-3"><Icon name={config.showIcons ? "eye" : "eye-off"} size={22}/><span className="text-lg font-black">圖片輔助模式</span></div>
-                                            <div className={`w-12 h-6 rounded-full relative transition-colors ${config.showIcons ? 'bg-indigo-600' : 'bg-slate-300'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.showIcons ? 'left-7' : 'left-1'}`}></div></div>
+
+                                        <button onClick={() => updateConfig('showIcons', !config.showIcons)} className={`w-full p-5 rounded-3xl border-2 transition-all flex items-center justify-between shadow-sm ${config.showIcons ? 'bg-indigo-50/50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-100 text-slate-400'}`}>
+                                            <div className="flex items-center gap-3"><Icon name={config.showIcons ? "eye" : "eye-off"} size={20}/><span className="text-sm md:text-base font-black">圖片輔助模式</span></div>
+                                            <div className={`w-10 h-5 rounded-full relative transition-colors ${config.showIcons ? 'bg-indigo-600' : 'bg-slate-300'}`}><div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${config.showIcons ? 'left-5.5' : 'left-0.5'}`}></div></div>
                                         </button>
                                     </div>
-                                    <button onClick={startGame} className="w-full max-w-xl mx-auto block bg-slate-900 hover:bg-black text-white text-xl font-black py-6 rounded-[2.5rem] shadow-2xl transition-all active:scale-95 group">
+
+                                    <button onClick={startGame} className="w-full max-w-sm mx-auto block bg-slate-900 hover:bg-black text-white text-xl font-black py-5 rounded-[2rem] shadow-xl transition-all active:scale-95 group">
                                         <div className="flex items-center justify-center gap-2">啟動訓練大腦 <Icon name="arrow-right" className="group-hover:translate-x-2 transition-transform" /></div>
                                     </button>
                                 </div>
                             )}
 
                             {stage === STAGES.MEMORIZE && (
-                                <div className="animate-in slide-in-from-right duration-500 text-center">
-                                    <div className="mb-8">
-                                        <div className="inline-block px-6 py-2 bg-indigo-50 border-2 border-indigo-100 rounded-3xl mb-4 shadow-sm">
-                                            <div className="flex items-center gap-3 text-indigo-600 font-mono text-2xl font-black">
-                                                <Icon name="timer" /> {memoryStopwatch} 秒
-                                            </div>
+                                <div className="animate-in slide-in-from-right duration-500 text-center flex flex-col h-full">
+                                    <div className="shrink-0 mb-6">
+                                        <div className="inline-flex items-center gap-3 px-6 py-2 bg-indigo-50 border-2 border-indigo-100 rounded-full mb-3 text-indigo-600 font-mono text-2xl font-black shadow-sm">
+                                            <Icon name="timer" size={20} /> {memoryStopwatch}
                                         </div>
-                                        <h3 className="text-3xl font-black text-slate-900 mb-2">第一階段：請記住以下物品</h3>
-                                        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full text-slate-500 font-bold text-sm">
-                                            <Icon name="package" size={16}/> 當前類別：{currentSet?.category}
-                                        </div>
+                                        <h3 className="text-2xl font-black text-slate-900 mb-1">請記住以下物品</h3>
+                                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">類別：{currentSet?.category}</p>
                                     </div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-12">
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-5 mb-8">
                                         {targets.map(item => (
-                                            <div key={item.id} className="bg-white border-2 border-slate-100 rounded-[2.5rem] p-6 text-center shadow-sm flex flex-col items-center justify-center min-h-[180px]">
-                                                {config.showIcons && <div className="text-6xl mb-4">{item.icon}</div>}
-                                                <div className={`font-black text-slate-800 ${config.showIcons ? 'text-2xl' : 'text-4xl'}`}>{item.name}</div>
+                                            <div key={item.id} className="bg-white border-2 border-slate-100 rounded-3xl p-4 md:p-6 text-center shadow-sm flex flex-col items-center justify-center min-h-[120px] md:min-h-[160px]">
+                                                {config.showIcons && <div className="text-5xl md:text-6xl mb-3">{item.icon}</div>}
+                                                <div className={`font-black text-slate-800 ${config.showIcons ? 'text-lg md:text-2xl' : 'text-3xl md:text-4xl'}`}>{item.name}</div>
                                             </div>
                                         ))}
                                     </div>
-                                    <button onClick={finishMemorize} className="w-full bg-indigo-600 text-white text-2xl font-black py-6 rounded-[2rem] shadow-xl active:scale-95 transition-all">
-                                        記好了，進入下一個挑戰
-                                    </button>
+                                    <div className="mt-auto shrink-0">
+                                        <button onClick={finishMemorize} className="w-full max-w-sm mx-auto block bg-indigo-600 text-white text-xl font-black py-5 rounded-3xl shadow-lg active:scale-95 transition-all">記好了，挑戰開始</button>
+                                    </div>
                                 </div>
                             )}
 
                             {stage === STAGES.DISTRACT && (
-                                <div className="text-center animate-in fade-in duration-300">
-                                    <div className="flex justify-center mb-12">
-                                        <div className={`px-8 py-3 bg-white border-2 rounded-3xl text-2xl font-black shadow-sm ${config.distractorMode === 'count' ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500'}`}>
-                                            {config.distractorMode === 'count' ? `已答對：${stats.distractorCorrect} / ${config.distractorTarget}` : `剩餘時間：${timerLeft} 秒`}
+                                <div className="text-center animate-in fade-in duration-300 h-full flex flex-col">
+                                    <div className="shrink-0 flex justify-center mb-6">
+                                        <div className={`px-6 py-2 bg-white border-2 rounded-full text-lg font-black shadow-sm ${config.distractorMode === 'count' ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500'}`}>
+                                            {config.distractorMode === 'count' ? `已答對：${stats.distractorCorrect} / ${config.distractorTarget}` : `時間：${timerLeft} 秒`}
                                         </div>
                                     </div>
-                                    <h3 className="text-2xl font-black mb-8 text-slate-400 uppercase tracking-widest">文字內容 與 顏色 是否一致？</h3>
-                                    <div className={`mb-12 py-24 bg-white rounded-[4rem] border-4 transition-all relative shadow-inner ${lastFeedback === 'correct' ? 'border-green-400 bg-green-50/30' : lastFeedback === 'wrong' ? 'border-red-400 bg-red-50/30 shake' : 'border-slate-50'}`}>
-                                        <span className="text-[7.5rem] font-black tracking-widest" style={{ color: distractorTask.color }}>{distractorTask.word}</span>
-                                        {lastFeedback === 'correct' && <div className="absolute top-10 right-10 text-green-500 animate-in zoom-in"><Icon name="check-circle-2" size={64} /></div>}
-                                        {lastFeedback === 'wrong' && <div className="absolute top-10 right-10 text-red-500 animate-in zoom-in"><Icon name="x" size={64} /></div>}
+                                    <h3 className="text-sm font-black text-slate-400 uppercase tracking-widest mb-6">文字 與 顏色 是否一致？</h3>
+                                    
+                                    <div className={`mb-8 flex-1 flex flex-col items-center justify-center bg-white rounded-[3rem] border-4 transition-all relative shadow-inner min-h-[250px] ${lastFeedback === 'correct' ? 'border-green-400 bg-green-50/20' : lastFeedback === 'wrong' ? 'border-red-400 bg-red-50/20 shake' : 'border-slate-50'}`}>
+                                        <span className="text-[5.5rem] md:text-[8rem] font-black tracking-widest" style={{ color: distractorTask.color }}>{distractorTask.word}</span>
+                                        {lastFeedback === 'correct' && <div className="absolute top-6 right-6 text-green-500"><Icon name="check-circle-2" size={48} /></div>}
+                                        {lastFeedback === 'wrong' && <div className="absolute top-6 right-6 text-red-500"><Icon name="x" size={48} /></div>}
                                     </div>
-                                    <div className="grid grid-cols-2 gap-10 max-w-2xl mx-auto">
-                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(true)} className="bg-green-500 hover:bg-green-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg active:scale-95 disabled:opacity-50 transition-all">是</button>
-                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(false)} className="bg-red-500 hover:bg-red-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg active:scale-95 disabled:opacity-50 transition-all">否</button>
+
+                                    <div className="grid grid-cols-2 gap-5 md:gap-8 max-w-lg mx-auto w-full shrink-0">
+                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(true)} className="bg-green-500 hover:bg-green-600 text-white py-8 md:py-10 rounded-3xl text-4xl font-black shadow-lg active:scale-95 disabled:opacity-50 transition-all">是</button>
+                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(false)} className="bg-red-500 hover:bg-red-600 text-white py-8 md:py-10 rounded-3xl text-4xl font-black shadow-lg active:scale-95 disabled:opacity-50 transition-all">否</button>
                                     </div>
                                 </div>
                             )}
 
                             {stage === STAGES.RECALL && (
-                                <div className="animate-in fade-in duration-500 text-center">
-                                    <h3 className="text-3xl font-black text-slate-900 mb-8">第三階段：延遲回憶挑戰</h3>
-                                    <div className="flex justify-center mb-10">
-                                        <div className="px-10 py-4 bg-indigo-600 text-white rounded-[2rem] font-black text-3xl shadow-xl ring-8 ring-indigo-50">{selections.length} / {targets.length}</div>
+                                <div className="animate-in fade-in duration-500 text-center flex flex-col h-full">
+                                    <h3 className="text-2xl font-black text-slate-900 mb-6">延遲回憶挑戰</h3>
+                                    <div className="flex justify-center mb-6 shrink-0">
+                                        <div className="px-8 py-2 bg-indigo-600 text-white rounded-full font-black text-xl shadow-md ring-4 ring-indigo-50">{selections.length} / {targets.length}</div>
                                     </div>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mb-12">
+                                    <div className="grid grid-cols-3 gap-2 md:gap-4 mb-8">
                                         {options.map(item => {
                                             const isSelected = selections.find(s => s.id === item.id);
                                             return (
-                                                <button key={item.id} onClick={() => toggleSelection(item)} className={`relative p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center ${isSelected ? 'border-indigo-500 bg-indigo-50/50 scale-95 shadow-inner' : 'border-slate-100 bg-white hover:border-slate-200 shadow-sm'} ${config.showIcons ? 'h-44' : 'h-32'}`}>
-                                                    {config.showIcons && <div className="text-5xl mb-2">{item.icon}</div>}
-                                                    <div className={`font-black text-slate-700 ${config.showIcons ? 'text-xl' : 'text-2xl'}`}>{item.name}</div>
-                                                    {isSelected && <div className="absolute top-4 right-4 bg-indigo-500 text-white rounded-full p-1 shadow-md"><Icon name="check-circle-2" size={24} /></div>}
+                                                <button key={item.id} onClick={() => toggleSelection(item)} className={`relative p-3 md:p-5 rounded-2xl md:rounded-3xl border-2 transition-all flex flex-col items-center justify-center ${isSelected ? 'border-indigo-500 bg-indigo-50 scale-95 shadow-inner' : 'border-slate-100 bg-white hover:border-slate-200 shadow-sm'} ${config.showIcons ? 'h-24 md:h-36' : 'h-16 md:h-24'}`}>
+                                                    {config.showIcons && <div className="text-2xl md:text-4xl mb-1">{item.icon}</div>}
+                                                    <div className={`font-black text-slate-700 ${config.showIcons ? 'text-xs md:text-lg' : 'text-sm md:text-xl'}`}>{item.name}</div>
+                                                    {isSelected && <div className="absolute top-1 right-1 bg-indigo-500 text-white rounded-full p-0.5"><Icon name="check-circle-2" size={14} /></div>}
                                                 </button>
                                             );
                                         })}
                                     </div>
-                                    <button onClick={finishGame} disabled={selections.length < targets.length} className={`w-full py-6 rounded-[2.5rem] text-2xl font-black shadow-2xl active:scale-95 transition-all ${selections.length < targets.length ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black'}`}>{selections.length < targets.length ? `還差 ${targets.length - selections.length} 個答案` : '完成訓練，查看分析報告'}</button>
+                                    <div className="mt-auto shrink-0">
+                                        <button onClick={finishGame} disabled={selections.length < targets.length} className={`w-full max-w-sm mx-auto block py-5 rounded-3xl text-lg font-black shadow-xl active:scale-95 transition-all ${selections.length < targets.length ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white'}`}>{selections.length < targets.length ? `還差 ${targets.length - selections.length} 個答案` : '完成並查看報告'}</button>
+                                    </div>
                                 </div>
                             )}
 
                             {stage === STAGES.RESULT && (
-                                <div className="animate-in zoom-in duration-500 text-center">
-                                    <div className="mb-10">
-                                        <div className="inline-block p-4 bg-slate-50 border rounded-3xl text-indigo-600 mb-4 shadow-sm"><Icon name="file-text" size={40}/></div>
-                                        <h3 className="text-4xl font-black text-slate-900">訓練報告</h3>
-                                        <p className="text-slate-400 font-bold">{currentDisplay.date}</p>
+                                <div className="animate-in zoom-in duration-500 text-center flex flex-col h-full">
+                                    <div className="mb-6 shrink-0">
+                                        <div className="inline-block p-3 bg-slate-50 border rounded-2xl text-indigo-600 mb-2 shadow-sm"><Icon name="file-text" size={32}/></div>
+                                        <h3 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tight">訓練報告</h3>
+                                        <p className="text-[10px] text-slate-400 font-bold">{currentDisplay.date}</p>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                                        <div className="bg-white rounded-[3rem] p-10 border-2 border-slate-50 shadow-sm text-center flex flex-col justify-center">
-                                            <p className="text-slate-400 font-black mb-2 uppercase text-sm">回憶準確率</p>
-                                            <div className="text-[6rem] font-black text-slate-900 leading-none mb-6">{Math.round((currentDisplay.score / currentDisplay.targets.length) * 100)}<span className="text-2xl ml-1">%</span></div>
-                                            <div className="flex justify-center gap-3">{currentDisplay.targets.map((t, idx) => (<div key={idx} className={`w-4 h-4 rounded-full ${currentDisplay.selections.some(s => s.id === t.id) ? 'bg-green-500' : 'bg-red-400'}`}></div>))}</div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                        <div className="bg-white rounded-[2rem] p-6 border-2 border-slate-50 shadow-sm text-center flex flex-col justify-center min-h-[180px]">
+                                            <p className="text-slate-400 font-black text-[10px] uppercase mb-1">回憶準確率</p>
+                                            <div className="text-6xl md:text-7xl font-black text-slate-900 leading-none mb-4">{Math.round((currentDisplay.score / currentDisplay.targets.length) * 100)}<span className="text-lg">%</span></div>
+                                            <div className="flex justify-center gap-2">{currentDisplay.targets.map((t, idx) => (<div key={idx} className={`w-3 h-3 rounded-full ${currentDisplay.selections.some(s => s.id === t.id) ? 'bg-green-500' : 'bg-red-400'}`}></div>))}</div>
                                         </div>
-                                        <div className="bg-indigo-600 rounded-[3rem] p-10 text-white shadow-xl space-y-5 flex flex-col justify-center text-left">
-                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>1. 物品記憶耗時</span><span className="font-bold text-xl">{currentDisplay.stats.memoryTime} 秒</span></div>
-                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>2. 干擾答對題數</span><span className="font-bold text-xl">{currentDisplay.stats.distractorCorrect} 題</span></div>
-                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>任務正確率</span><span className="font-bold">{Math.round((currentDisplay.stats.distractorCorrect / currentDisplay.stats.distractorTotal) * 100 || 0)}%</span></div>
-                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>平均反應時間</span><span className="font-bold">{getAverageReactionTime(currentDisplay.stats.reactionTimes)} 秒</span></div>
+                                        <div className="bg-indigo-600 rounded-[2rem] p-6 text-white shadow-lg space-y-3 text-sm flex flex-col justify-center text-left">
+                                            <div className="flex justify-between border-b border-indigo-400 pb-1"><span>記憶耗時</span><span className="font-bold">{currentDisplay.stats.memoryTime} s</span></div>
+                                            <div className="flex justify-between border-b border-indigo-400 pb-1"><span>干擾答對</span><span className="font-bold">{currentDisplay.stats.distractorCorrect} 題</span></div>
+                                            <div className="flex justify-between border-b border-indigo-400 pb-1"><span>正確率</span><span className="font-bold">{Math.round((currentDisplay.stats.distractorCorrect / currentDisplay.stats.distractorTotal) * 100 || 0)}%</span></div>
+                                            <div className="flex justify-between border-b border-indigo-400 pb-1"><span>反應速度</span><span className="font-bold">{getAverageReactionTime(currentDisplay.stats.reactionTimes)} s</span></div>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-50 rounded-[2.5rem] p-8 mb-10 text-left">
-                                        <div className="font-black text-slate-800 mb-6 px-2">記憶物件清單 (目標項)</div>
-                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                    <div className="bg-slate-50 rounded-[2rem] p-5 mb-8 text-left max-h-[150px] overflow-y-auto custom-scrollbar shadow-inner">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase mb-3 px-1">記憶清單</div>
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
                                             {currentDisplay.targets.map(t => (
-                                                <div key={t.id} className="flex items-center gap-3 px-5 py-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
-                                                    <span className="text-3xl">{t.icon}</span>
-                                                    <div className="flex-1 font-black text-slate-700 truncate">{t.name}</div>
-                                                    {currentDisplay.selections.some(s => s.id === t.id) ? <Icon name="check-circle-2" className="text-green-500" /> : <Icon name="x" className="text-red-400" />}
+                                                <div key={t.id} className="flex items-center gap-2 px-3 py-2 bg-white rounded-xl border border-slate-100 shadow-sm text-xs">
+                                                    <span>{t.icon}</span>
+                                                    <span className="flex-1 font-black text-slate-600 truncate">{t.name}</span>
+                                                    {currentDisplay.selections.some(s => s.id === t.id) ? <Icon name="check-circle-2" size={14} className="text-green-500" /> : <Icon name="x" size={14} className="text-red-400" />}
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                    <div className="flex gap-4">
-                                        <button onClick={() => { setViewingRecord(null); setStage(STAGES.START); }} className="flex-1 bg-slate-900 text-white py-6 rounded-3xl text-xl font-black shadow-xl active:scale-95 transition-all">回到主畫面</button>
-                                        <button onClick={() => setStage(STAGES.HISTORY)} className="flex-1 bg-white border-2 border-slate-100 text-slate-600 py-6 rounded-3xl text-xl font-black shadow-md transition-all">歷史成績</button>
+                                    <div className="flex gap-3 mt-auto shrink-0">
+                                        <button onClick={() => { setViewingRecord(null); setStage(STAGES.START); }} className="flex-1 bg-slate-900 text-white py-4 md:py-5 rounded-2xl text-base font-black shadow-md active:scale-95 transition-all">主畫面</button>
+                                        <button onClick={() => setStage(STAGES.HISTORY)} className="flex-1 bg-white border border-slate-200 text-slate-600 py-4 md:py-5 rounded-2xl text-base font-black shadow-sm transition-all">歷史成績</button>
                                     </div>
                                 </div>
                             )}
 
                             {stage === STAGES.HISTORY && (
-                                <div className="animate-in fade-in duration-400">
-                                    <div className="flex justify-between items-center mb-10"><h3 className="text-3xl font-black text-slate-900 flex items-center gap-4"><Icon name="history" size={32} className="text-indigo-600" /> 訓練歷史紀錄</h3><button onClick={() => setStage(STAGES.START)}><Icon name="x" size={36} className="text-slate-400 hover:text-slate-600 transition-colors"/></button></div>
-                                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-3 custom-scrollbar">
-                                        {practiceHistory.length === 0 ? <div className="text-center py-24 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-slate-400 font-black">目前尚無數據</div> : 
+                                <div className="animate-in fade-in duration-400 flex flex-col h-full">
+                                    <div className="flex justify-between items-center mb-6 shrink-0"><h3 className="text-xl font-black text-slate-900 flex items-center gap-3"><Icon name="history" size={24} className="text-indigo-600" /> 歷史訓練紀錄</h3><button onClick={() => setStage(STAGES.START)}><Icon name="x" size={28} className="text-slate-400"/></button></div>
+                                    <div className="space-y-3 flex-1 overflow-y-auto pr-1 custom-scrollbar">
+                                        {practiceHistory.length === 0 ? <div className="text-center py-20 bg-slate-100 rounded-3xl text-slate-400 text-sm font-black">目前尚未有訓練數據</div> : 
                                             practiceHistory.map(record => (
-                                                <button key={record.id} onClick={() => showHistoryRecord(record)} className="w-full bg-white border-2 border-slate-50 p-6 rounded-[2rem] flex justify-between items-center hover:border-indigo-300 transition-all text-left shadow-sm group">
-                                                    <div><div className="text-xs font-black text-slate-300 uppercase">{record.date}</div><div className="text-xl font-black text-slate-800 group-hover:text-indigo-700 transition-colors">記憶 {record.config.targetCount} 項挑戰</div><div className="text-sm text-slate-400">記憶耗時：{record.stats.memoryTime} 秒</div></div>
-                                                    <div className="flex items-center gap-6"><div className="text-right"><div className="text-4xl font-black text-indigo-600">{Math.round((record.stats.finalScore / record.config.targetCount) * 100)}%</div></div><Icon name="chevron-right" className="text-slate-200 group-hover:text-indigo-400 transition-all" size={28} /></div>
+                                                <button key={record.id} onClick={() => showHistoryRecord(record)} className="w-full bg-white border border-slate-100 p-4 rounded-2xl flex justify-between items-center hover:border-indigo-300 transition-all text-left shadow-sm group">
+                                                    <div className="flex-1 min-w-0 mr-3">
+                                                        <div className="text-[10px] font-black text-slate-300 uppercase mb-1">{record.date.split(' ')[0]}</div>
+                                                        <div className="text-sm font-black text-slate-800 group-hover:text-indigo-700 transition-colors truncate">記憶 {record.config.targetCount} 項挑戰</div>
+                                                        <div className="text-[10px] text-slate-400 font-bold">耗時：{record.stats.memoryTime} 秒</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 shrink-0">
+                                                        <div className="text-right">
+                                                            <div className="text-xl md:text-2xl font-black text-indigo-600">{Math.round((record.stats.finalScore / record.config.targetCount) * 100)}%</div>
+                                                        </div>
+                                                        <Icon name="chevron-right" className="text-slate-200" size={20} />
+                                                    </div>
                                                 </button>
                                             ))
                                         }
                                     </div>
-                                    <button onClick={() => setStage(STAGES.START)} className="w-full mt-10 bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xl hover:bg-black transition-all">回到主畫面</button>
+                                    <button onClick={() => setStage(STAGES.START)} className="w-full mt-4 shrink-0 bg-slate-900 text-white py-4 rounded-2xl font-black shadow-md">回到主畫面</button>
                                 </div>
                             )}
                         </div>
+                    </main>
 
-                        {/* Footer info */}
-                        <div className="bg-slate-50 p-6 border-t border-slate-100 flex flex-col items-center gap-4">
-                            <div className="flex justify-center gap-6 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                                <div className="flex items-center gap-1"><Icon name="home" size={12}/> Living</div>
-                                <div className="flex items-center gap-1"><Icon name="brain" size={12}/> Memory</div>
-                                <div className="flex items-center gap-1"><Icon name="eye" size={12}/> Cognitive</div>
-                            </div>
-                            <div className="text-slate-400 text-xs font-bold border-t border-slate-200 pt-4 w-full text-center">
-                                設計：<a href="https://www.facebook.com/mpotkevin" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 transition-colors underline decoration-indigo-200 underline-offset-4 decoration-2 font-bold uppercase tracking-tight">職能治療師 - 鄭凱文</a>
+                    {/* Footer - 固定 */}
+                    <footer className="bg-white border-t border-slate-100 p-4 md:p-5 shrink-0 z-10 text-center">
+                        <div className="flex justify-center gap-6 text-slate-400 text-[10px] font-black uppercase tracking-widest mb-3">
+                            <div className="flex items-center gap-1"><Icon name="home" size={12}/> Living</div>
+                            <div className="flex items-center gap-1"><Icon name="brain" size={12}/> Memory</div>
+                            <div className="flex items-center gap-1"><Icon name="eye" size={12}/> Cognitive</div>
+                        </div>
+                        <p className="text-slate-400 text-[11px] md:text-xs font-bold border-t border-slate-50 pt-3">
+                            設計：<a href="https://www.facebook.com/mpotkevin" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 transition-colors underline decoration-indigo-200 underline-offset-4 decoration-2 font-bold uppercase tracking-tight">職能治療師 - 鄭凱文</a>
+                        </p>
+                    </footer>
+
+                    {/* Modals & Popups */}
+                    {showAbortModal && (
+                        <div className="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm p-4 flex items-center justify-center animate-in fade-in duration-200">
+                            <div className="bg-white rounded-[2.5rem] p-6 md:p-8 max-w-sm w-full shadow-2xl text-center animate-in zoom-in duration-300">
+                                <div className="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+                                    <Icon name="alert-triangle" size={32} />
+                                </div>
+                                <h4 className="text-xl font-black text-slate-800 mb-2">中斷訓練？</h4>
+                                <p className="text-slate-400 text-sm mb-6 font-medium">目前的進度將會遺失。</p>
+                                <div className="flex gap-3">
+                                    <button onClick={() => setShowAbortModal(false)} className="flex-1 py-3.5 bg-slate-100 text-slate-600 rounded-xl font-black transition-all">取消</button>
+                                    <button onClick={resetAllStates} className="flex-1 py-3.5 bg-red-500 text-white rounded-xl font-black shadow-lg shadow-red-100 transition-all">確定</button>
+                                </div>
                             </div>
                         </div>
+                    )}
 
-                        {/* 自定義中斷確認彈窗 */}
-                        {showAbortModal && (
-                            <div className="absolute inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm p-4 flex items-center justify-center animate-in fade-in duration-200">
-                                <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border-2 border-red-50 animate-in zoom-in duration-300">
-                                    <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
-                                        <Icon name="alert-triangle" size={40} />
+                    {showPool && (
+                        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xl p-4 flex items-center justify-center">
+                            <div className="bg-white w-full max-w-xl max-h-[85vh] rounded-[3rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in duration-300">
+                                <div className="p-6 bg-slate-50 border-b flex justify-between items-center shrink-0">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2 bg-white rounded-xl text-indigo-600 shadow-sm"><Icon name="package" size={24} /></div>
+                                        <h4 className="text-lg font-black text-slate-900">題庫管理</h4>
                                     </div>
-                                    <h4 className="text-2xl font-black text-slate-800 mb-4">確定要中斷嗎？</h4>
-                                    <p className="text-slate-500 mb-8 font-medium">中斷後目前的訓練進度將會遺失。</p>
-                                    <div className="flex gap-4">
-                                        <button onClick={() => setShowAbortModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">繼續訓練</button>
-                                        <button onClick={resetAllStates} className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black shadow-lg shadow-red-100 hover:bg-red-600 transition-all">確定中斷</button>
-                                    </div>
+                                    <button onClick={() => setShowPool(false)} className="p-2 text-slate-400"><Icon name="x" size={24} /></button>
                                 </div>
-                            </div>
-                        )}
-
-                        {/* 題庫彈窗 */}
-                        {showPool && (
-                            <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-xl p-4 flex items-center justify-center">
-                                <div className="bg-white w-full max-h-[92%] rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in duration-300">
-                                    <div className="p-8 bg-slate-50 border-b flex justify-between items-center">
-                                        <div className="flex items-center gap-4"><div className="p-3 bg-white rounded-2xl text-indigo-600 shadow-sm"><Icon name="package" size={28} /></div><div><h4 className="text-2xl font-black text-slate-900">訓練題庫管理</h4></div></div>
-                                        <button onClick={() => setShowPool(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><Icon name="x" size={32} /></button>
-                                    </div>
-                                    <div className="p-8 bg-white border-b">
-                                        <form onSubmit={handleAddNewItem} className="flex gap-4">
-                                            <input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="例如：放大鏡..." className="flex-1 p-4 border-2 border-slate-100 rounded-2xl font-bold bg-slate-50/50 outline-none focus:border-indigo-400 transition-all shadow-inner" />
-                                            <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="p-4 border-2 border-slate-100 rounded-2xl font-bold bg-slate-50/50 text-slate-600 outline-none focus:border-indigo-400 transition-all">
-                                                {wordLibrary.map(cat => <option key={cat.category} value={cat.category}>{cat.category}</option>)}
-                                            </select>
-                                            <button type="submit" className="bg-slate-900 text-white px-8 rounded-2xl font-black hover:bg-black transition-all active:scale-95 shadow-lg">新增</button>
-                                        </form>
-                                    </div>
-                                    <div className="p-8 overflow-y-auto space-y-12 bg-slate-50/20 custom-scrollbar">
-                                        {wordLibrary.map(set => (
-                                            <div key={set.category}>
-                                                <h5 className="font-black text-slate-900 mb-6 flex items-center gap-3 text-xl"><div className="w-2.5 h-6 bg-indigo-500 rounded-full"></div>{set.category}</h5>
-                                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
-                                                    {set.items.map(item => (
-                                                        <div key={item.id} className="group relative p-5 bg-white rounded-3xl text-center border border-slate-100 flex flex-col items-center shadow-sm hover:border-red-200 transition-all">
-                                                            <button onClick={() => handleDeleteItem(set.category, item.id)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90"><Icon name="trash-2" size={14} /></button>
-                                                            <div className="text-4xl mb-2">{typeof item.icon === 'string' ? item.icon : '📦'}</div>
-                                                            <div className="text-xs font-black text-slate-600 truncate w-full">{item.name}</div>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                <div className="p-6 bg-white border-b shrink-0">
+                                    <form onSubmit={handleAddNewItem} className="flex gap-2">
+                                        <input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="新增物品..." className="flex-1 px-4 py-3 border-2 border-slate-100 rounded-xl text-sm font-bold bg-slate-50/50 outline-none focus:border-indigo-400" />
+                                        <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="px-3 py-3 border-2 border-slate-100 rounded-xl text-xs font-bold bg-slate-50/50 text-slate-500">
+                                            {wordLibrary.map(cat => <option key={cat.category} value={cat.category}>{cat.category}</option>)}
+                                        </select>
+                                        <button type="submit" className="bg-slate-900 text-white px-5 rounded-xl font-black text-xs active:scale-95 shadow-md">新增</button>
+                                    </form>
+                                </div>
+                                <div className="p-6 overflow-y-auto space-y-8 bg-slate-50/20 custom-scrollbar flex-1">
+                                    {wordLibrary.map(set => (
+                                        <div key={set.category}>
+                                            <h5 className="font-black text-slate-900 mb-4 flex items-center gap-2 text-sm"><div className="w-1.5 h-4 bg-indigo-500 rounded-full"></div>{set.category}</h5>
+                                            <div className="grid grid-cols-3 md:grid-cols-4 gap-3">
+                                                {set.items.map(item => (
+                                                    <div key={item.id} className="group relative p-3 bg-white rounded-2xl text-center border border-slate-100 shadow-sm">
+                                                        <button onClick={() => handleDeleteItem(set.category, item.id)} className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={10} /></button>
+                                                        <div className="text-2xl mb-1">{typeof item.icon === 'string' ? item.icon : '📦'}</div>
+                                                        <div className="text-[10px] font-black text-slate-500 truncate">{item.name}</div>
+                                                    </div>
+                                                ))}
                                             </div>
-                                        ))}
-                                    </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
-                        )}
-                    </div>
+                        </div>
+                    )}
                 </div>
             );
         }
