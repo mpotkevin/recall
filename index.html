@@ -1,757 +1,501 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  Brain, 
-  Camera, 
-  Timer, 
-  CheckCircle2, 
-  ArrowRight, 
-  RotateCcw,
-  Home,
-  Utensils,
-  ShoppingBag,
-  AlertCircle,
-  Plus,
-  Minus,
-  Settings,
-  BookOpen,
-  X,
-  Target,
-  PlusCircle,
-  Package,
-  Eye,
-  EyeOff,
-  Trash2,
-  BarChart3,
-  Clock,
-  History,
-  FileText,
-  ChevronRight,
-  Layers,
-  Zap
-} from 'lucide-react';
-
-// 預設詞彙題庫 (保持 100 個左右的規模，這裡列出代表性類別)
-const INITIAL_WORD_SETS = [
-  { category: "客廳與居家", items: [
-    { id: 'l1', name: '電視', icon: '📺' }, { id: 'l2', name: '沙發', icon: '🛋️' }, { id: 'l3', name: '遙控器', icon: '🕹️' },
-    { id: 'l4', name: '電風扇', icon: '🌀' }, { id: 'l5', name: '電話', icon: '☎️' }, { id: 'l6', name: '茶几', icon: '🍵' },
-    { id: 'l7', name: '時鐘', icon: '⏰' }, { id: 'l8', name: '報紙', icon: '📰' }, { id: 'l9', name: '檯燈', icon: '💡' }, { id: 'l10', name: '冷氣', icon: '❄️' }
-  ]},
-  { category: "廚房與飲食", items: [
-    { id: 'k1', name: '湯匙', icon: '🥄' }, { id: 'k2', name: '筷子', icon: '🥢' }, { id: 'k3', name: '碗公', icon: '🥣' },
-    { id: 'k4', name: '叉子', icon: '🍴' }, { id: 'k5', name: '糖果', icon: '🍬' }, { id: 'k6', name: '盤子', icon: '🍽️' },
-    { id: 'k7', name: '電鍋', icon: '🍚' }, { id: 'k8', name: '菜刀', icon: '🔪' }, { id: 'k9', name: '水壺', icon: '🍶' }, { id: 'k10', name: '冰箱', icon: '🧊' }
-  ]},
-  { category: "臥室用品", items: [
-    { id: 'b1', name: '枕頭', icon: '💤' }, { id: 'b2', name: '棉被', icon: '🛌' }, { id: 'b3', name: '床墊', icon: '🛏️' },
-    { id: 'b4', name: '衣櫃', icon: '🚪' }, { id: 'b5', name: '梳子', icon: '🪮' }, { id: 'b6', name: '鏡子', icon: '🪞' },
-    { id: 'b7', name: '睡衣', icon: '👕' }, { id: 'b8', name: '鬧鐘', icon: '🔔' }, { id: 'b9', name: '拖鞋', icon: '🩴' }, { id: 'b10', name: '窗簾', icon: '🖼️' }
-  ]},
-  { category: "外出必備", items: [
-    { id: 'o1', name: '雨傘', icon: '🌂' }, { id: 'o2', name: '帽子', icon: '👒' }, { id: 'o3', name: '口罩', icon: '😷' },
-    { id: 'o4', name: '鑰匙', icon: '🔑' }, { id: 'o5', name: '錢包', icon: '👛' }, { id: 'o6', name: '手機', icon: '📱' },
-    { id: 'o7', name: '自行車', icon: '🚲' }, { id: 'o8', name: '公車', icon: '🚌' }, { id: 'o9', name: '悠遊卡', icon: '💳' }, { id: 'o10', name: '手電筒', icon: '🔦' }
-  ]},
-  { category: "休閒興趣", items: [
-    { id: 'h1', name: '象棋', icon: '♟️' }, { id: 'h2', name: '撲克牌', icon: '🃏' }, { id: 'h3', name: '收音機', icon: '📻' },
-    { id: 'h4', name: '盆栽', icon: '🪴' }, { id: 'h5', name: '魚竿', icon: '🎣' }, { id: 'h6', name: '相機', icon: '📷' },
-    { id: 'h7', name: '毛線', icon: '🧶' }, { id: 'h8', name: '鋼琴', icon: '🎹' }, { id: 'h9', name: '毛筆', icon: '🖌️' }, { id: 'h10', name: '放大鏡', icon: '🔍' }
-  ]}
-];
-
-const STAGES = { START: 'START', MEMORIZE: 'MEMORIZE', DISTRACT: 'DISTRACT', RECALL: 'RECALL', RESULT: 'RESULT', HISTORY: 'HISTORY' };
-
-// 更新顏色設定，黃色使用 #F2CD13
-const COLORS = [
-  { name: '紅色', color: '#ef4444' }, 
-  { name: '藍色', color: '#3b82f6' },
-  { name: '綠色', color: '#22c55e' }, 
-  { name: '黃色', color: '#F2CD13' }, 
-  { name: '紫色', color: '#a855f7' }, 
-  { name: '橘色', color: '#f97316' },
-  { name: '粉色', color: '#f472b6' }, 
-  { name: '棕色', color: '#92400e' },
-  { name: '黑色', color: '#000000' }, 
-  { name: '灰色', color: '#94a3b8' }
-];
-
-export default function App() {
-  const [stage, setStage] = useState(STAGES.START);
-  const [wordLibrary, setWordLibrary] = useState(INITIAL_WORD_SETS);
-  const [currentSet, setCurrentSet] = useState(null);
-  const [targets, setTargets] = useState([]);
-  const [options, setOptions] = useState([]);
-  const [selections, setSelections] = useState([]);
-  const [distractorTask, setDistractorTask] = useState({ word: '', color: '', isMatch: false });
-  const [showPool, setShowPool] = useState(false);
-  const [lastFeedback, setLastFeedback] = useState(null);
-  const [score, setScore] = useState(0);
-  const [viewingRecord, setViewingRecord] = useState(null);
-
-  // 干擾平衡與統計
-  const distractorHistory = useRef({ matchCount: 0, mismatchCount: 0 });
-  const [timerLeft, setTimerLeft] = useState(0);
-  const [stats, setStats] = useState({
-    startTime: 0,
-    endTime: 0,
-    distractorTotal: 0,
-    distractorCorrect: 0,
-    distractorWrong: 0,
-    reactionTimes: [],
-    lastActionTime: 0
-  });
-
-  const [practiceHistory, setPracticeHistory] = useState([]);
-  const [newItem, setNewItem] = useState({ name: '', category: '客廳與居家' });
-
-  const [config, setConfig] = useState({
-    targetCount: 3,
-    distractorMode: 'count', 
-    distractorTarget: 5,     
-    distractorDuration: 30,  
-    recallDistractorCount: 3,
-    showIcons: true
-  });
-
-  const updateConfig = (key, val) => setConfig(prev => ({ ...prev, [key]: val }));
-
-  const renderItemIcon = (icon, size = "text-6xl") => {
-    if (icon === 'package-default') return <Package className={`${size === 'text-6xl' ? 'w-16 h-16' : 'w-8 h-8'} text-slate-400`} />;
-    return <div className={size}>{icon}</div>;
-  };
-
-  const startGame = () => {
-    const availableCategories = wordLibrary.filter(c => c.items.length >= config.targetCount);
-    if (availableCategories.length === 0) return alert("題庫內容不足，請新增詞彙或減少挑戰數量！");
-
-    const randomSet = availableCategories[Math.floor(Math.random() * availableCategories.length)];
-    const shuffledItems = [...randomSet.items].sort(() => 0.5 - Math.random());
-    const targetItems = shuffledItems.slice(0, config.targetCount);
-    
-    setCurrentSet(randomSet);
-    setTargets(targetItems);
-    setSelections([]);
-    setLastFeedback(null);
-    setScore(0);
-    setViewingRecord(null);
-    setStats({
-      startTime: Date.now(),
-      endTime: 0,
-      distractorTotal: 0,
-      distractorCorrect: 0,
-      distractorWrong: 0,
-      reactionTimes: [],
-      lastActionTime: 0
-    });
-    distractorHistory.current = { matchCount: 0, mismatchCount: 0 };
-    setStage(STAGES.MEMORIZE);
-  };
-
-  const nextDistractor = useCallback(() => {
-    const history = distractorHistory.current;
-    let shouldMatch;
-    if (history.matchCount > history.mismatchCount + 1) shouldMatch = false;
-    else if (history.mismatchCount > history.matchCount + 1) shouldMatch = true;
-    else shouldMatch = Math.random() > 0.5;
-
-    const wordObj = COLORS[Math.floor(Math.random() * COLORS.length)];
-    let colorObj;
-
-    if (shouldMatch) {
-      colorObj = wordObj;
-      history.matchCount++;
-    } else {
-      const otherColors = COLORS.filter(c => c.name !== wordObj.name);
-      colorObj = otherColors[Math.floor(Math.random() * otherColors.length)];
-      history.mismatchCount++;
-    }
-
-    setDistractorTask({ word: wordObj.name, color: colorObj.color, isMatch: shouldMatch });
-    setStats(prev => ({ ...prev, lastActionTime: Date.now() }));
-  }, []);
-
-  const handleDistractorAnswer = (answer) => {
-    const isCorrect = answer === distractorTask.isMatch;
-    const now = Date.now();
-    const reactionTime = now - stats.lastActionTime;
-
-    setStats(prev => ({
-      ...prev,
-      distractorTotal: prev.distractorTotal + 1,
-      distractorCorrect: isCorrect ? prev.distractorCorrect + 1 : prev.distractorCorrect,
-      distractorWrong: !isCorrect ? prev.distractorWrong + 1 : prev.distractorWrong,
-      reactionTimes: [...prev.reactionTimes, reactionTime]
-    }));
-
-    if (isCorrect) {
-      setLastFeedback('correct');
-      const currentCorrect = stats.distractorCorrect + 1;
-      if (config.distractorMode === 'count' && currentCorrect >= config.distractorTarget) {
-        setTimeout(() => prepareRecall(), 400);
-      } else {
-        setTimeout(() => { setLastFeedback(null); nextDistractor(); }, 400);
-      }
-    } else {
-      setLastFeedback('wrong');
-      setTimeout(() => { setLastFeedback(null); nextDistractor(); }, 600);
-    }
-  };
-
-  useEffect(() => {
-    let timer;
-    if (stage === STAGES.DISTRACT && config.distractorMode === 'time') {
-      setTimerLeft(config.distractorDuration);
-      timer = setInterval(() => {
-        setTimerLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            prepareRecall();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
-    return () => clearInterval(timer);
-  }, [stage, config.distractorMode, config.distractorDuration]);
-
-  const prepareRecall = () => {
-    const distractorsPool = currentSet.items.filter(item => !targets.some(t => t.id === item.id));
-    const selectedDistractors = [...distractorsPool].sort(() => 0.5 - Math.random()).slice(0, config.recallDistractorCount);
-    const combined = [...targets, ...selectedDistractors].sort(() => 0.5 - Math.random());
-    setOptions(combined);
-    setStage(STAGES.RECALL);
-  };
-
-  const toggleSelection = (item) => {
-    if (selections.find(s => s.id === item.id)) {
-      setSelections(selections.filter(s => s.id !== item.id));
-    } else if (selections.length < targets.length) {
-      setSelections([...selections, item]);
-    }
-  };
-
-  const finishGame = () => {
-    const correctCount = selections.filter(s => targets.find(t => t.id === s.id)).length;
-    const finalStats = { ...stats, endTime: Date.now(), finalScore: correctCount };
-    setScore(correctCount);
-    
-    const record = {
-      id: Date.now(),
-      date: new Date().toLocaleString(),
-      config: { ...config },
-      targetItems: targets.map(t => ({ name: t.name, icon: t.icon, id: t.id })),
-      stats: finalStats,
-      selections: selections.map(s => ({ id: s.id, name: s.name, icon: s.icon, isCorrect: targets.some(t => t.id === s.id) }))
-    };
-    setPracticeHistory(prev => [record, ...prev]);
-    setStage(STAGES.RESULT);
-  };
-
-  const showHistoryRecord = (record) => {
-    setViewingRecord(record);
-    setStage(STAGES.RESULT);
-  };
-
-  const handleDeleteItem = (categoryId, itemId) => {
-    setWordLibrary(prev => prev.map(cat => {
-      if (cat.category === categoryId) {
-        return { ...cat, items: cat.items.filter(item => item.id !== itemId) };
-      }
-      return cat;
-    }));
-  };
-
-  const handleAddNewItem = (e) => {
-    e.preventDefault();
-    if (!newItem.name.trim()) return;
-    const itemToAdd = { id: `custom-${Date.now()}`, name: newItem.name, icon: 'package-default' };
-    setWordLibrary(prev => prev.map(cat => cat.category === newItem.category ? { ...cat, items: [itemToAdd, ...cat.items] } : cat));
-    setNewItem({ ...newItem, name: '' });
-  };
-
-  useEffect(() => {
-    if (stage === STAGES.DISTRACT) nextDistractor();
-  }, [stage, nextDistractor]);
-
-  const currentDisplay = viewingRecord ? {
-    score: viewingRecord.stats.finalScore,
-    targets: viewingRecord.targetItems,
-    stats: viewingRecord.stats,
-    config: viewingRecord.config,
-    selections: viewingRecord.selections,
-    date: viewingRecord.date
-  } : {
-    score: score,
-    targets: targets,
-    stats: stats,
-    config: config,
-    selections: selections,
-    date: new Date().toLocaleString()
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 p-2 md:p-8 font-sans text-slate-800">
-      <div className="max-w-3xl mx-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden relative border border-slate-100">
-        
-        {/* Header - 更專業的標題與輔助工具 */}
-        <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
-              <Brain size={28} />
-            </div>
-            <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">延遲記憶王</h1>
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cognitive Mastery Pro</p>
-            </div>
-          </div>
-          <div className="flex gap-2">
-            <button onClick={() => setStage(STAGES.HISTORY)} className="p-2.5 bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-all border border-slate-100" title="訓練紀錄">
-              <History size={22} />
-            </button>
-            <button onClick={() => setShowPool(true)} className="flex items-center gap-2 bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-slate-100">
-              <Package size={20} /> 管理題庫
-            </button>
-          </div>
-        </div>
-
-        {/* Content Area */}
-        <div className="p-6 md:p-10">
-          
-          {/* 1. START STAGE - 極簡初始畫面 */}
-          {stage === STAGES.START && (
-            <div className="animate-in fade-in zoom-in duration-500">
-              <div className="text-center mb-10">
-                <div className="inline-block mb-4 px-4 py-1 bg-indigo-50 text-indigo-600 rounded-full text-sm font-black">
-                  DAILY TRAINING
-                </div>
-                <h2 className="text-4xl font-black text-slate-900 mb-2">準備開始訓練</h2>
-                <p className="text-slate-400">客製化您的認知挑戰模式</p>
-              </div>
-
-              <div className="space-y-4 mb-10 max-w-xl mx-auto">
-                <div className="grid grid-cols-2 gap-4">
-                  <CompactConfig 
-                    icon={<Target size={20} className="text-indigo-500" />} 
-                    title="物品記憶" 
-                    val={config.targetCount} 
-                    onUp={() => updateConfig('targetCount', Math.min(10, config.targetCount + 1))} 
-                    onDown={() => updateConfig('targetCount', Math.max(1, config.targetCount - 1))} 
-                  />
-                  <CompactConfig 
-                    icon={<Layers size={20} className="text-amber-500" />} 
-                    title="回憶混淆" 
-                    val={config.recallDistractorCount} 
-                    onUp={() => updateConfig('recallDistractorCount', Math.min(15, config.recallDistractorCount + 1))} 
-                    onDown={() => updateConfig('recallDistractorCount', Math.max(0, config.recallDistractorCount - 1))} 
-                  />
-                </div>
-
-                <div className="bg-slate-50/50 p-6 rounded-[2rem] border-2 border-slate-100 group hover:border-indigo-100 transition-all">
-                  <div className="flex justify-between items-center mb-5">
-                    <div className="flex items-center gap-2">
-                      <div className="p-1.5 bg-white rounded-lg shadow-sm">
-                        <Zap size={18} className="text-indigo-600" />
-                      </div>
-                      <span className="text-lg font-black text-slate-700">任務切換模式</span>
-                    </div>
-                    <div className="flex bg-slate-200 p-1 rounded-xl">
-                      <button 
-                        onClick={() => updateConfig('distractorMode', 'count')}
-                        className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'count' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                      >次數達標</button>
-                      <button 
-                        onClick={() => updateConfig('distractorMode', 'time')}
-                        className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'time' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}
-                      >計時挑戰</button>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-center py-2">
-                    {config.distractorMode === 'count' ? (
-                      <div className="flex items-center gap-8 animate-in slide-in-from-top duration-300">
-                        <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">目標正確題數</span>
-                        <Counter val={config.distractorTarget} onUp={() => updateConfig('distractorTarget', Math.min(50, config.distractorTarget + 1))} onDown={() => updateConfig('distractorTarget', Math.max(1, config.distractorTarget - 1))} />
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-8 animate-in slide-in-from-top duration-300">
-                        <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">限時挑戰秒數</span>
-                        <Counter val={config.distractorDuration} onUp={() => updateConfig('distractorDuration', Math.min(120, config.distractorDuration + 10))} onDown={() => updateConfig('distractorDuration', Math.max(10, config.distractorDuration - 10))} />
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <button 
-                  onClick={() => updateConfig('showIcons', !config.showIcons)}
-                  className={`w-full p-5 rounded-[2rem] border-2 transition-all flex items-center justify-between group ${config.showIcons ? 'bg-indigo-50/50 border-indigo-100 text-indigo-700' : 'bg-slate-50/50 border-slate-100 text-slate-400'}`}
-                >
-                  <div className="flex items-center gap-3">
-                    {config.showIcons ? <Eye size={22}/> : <EyeOff size={22}/>}
-                    <span className="text-lg font-black">圖片輔助模式</span>
-                  </div>
-                  <div className={`w-12 h-6 rounded-full relative transition-colors ${config.showIcons ? 'bg-indigo-600' : 'bg-slate-300'}`}>
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.showIcons ? 'left-7' : 'left-1'}`}></div>
-                  </div>
-                </button>
-              </div>
-
-              <button onClick={startGame} className="w-full max-w-xl mx-auto block bg-slate-900 hover:bg-black text-white text-xl font-black py-6 rounded-[2.5rem] shadow-2xl transition-all active:scale-95 group relative overflow-hidden">
-                <div className="flex items-center justify-center gap-2 relative z-10">
-                  啟動訓練大腦 <ArrowRight className="group-hover:translate-x-2 transition-transform" />
-                </div>
-              </button>
-            </div>
-          )}
-
-          {/* 2. MEMORIZE STAGE */}
-          {stage === STAGES.MEMORIZE && (
-            <div className="animate-in slide-in-from-right duration-500">
-              <div className="text-center mb-8">
-                <h3 className="text-3xl font-black text-slate-900 mb-2">請記住以下物品</h3>
-                <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full text-slate-500 font-bold text-sm">
-                  <Package size={16}/> 當前類別：{currentSet.category}
-                </div>
-              </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-12">
-                {targets.map(item => (
-                  <div key={item.id} className="bg-white border-2 border-slate-100 rounded-[2.5rem] p-6 text-center shadow-sm hover:shadow-md transition-all flex flex-col items-center justify-center min-h-[180px]">
-                    {config.showIcons && <div className="mb-4">{renderItemIcon(item.icon)}</div>}
-                    <div className={`font-black text-slate-800 ${config.showIcons ? 'text-2xl' : 'text-4xl'}`}>
-                      {item.name}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <button onClick={() => setStage(STAGES.DISTRACT)} className="w-full bg-indigo-600 text-white text-2xl font-black py-6 rounded-[2rem] shadow-xl shadow-indigo-100">
-                記好了，開始挑戰
-              </button>
-            </div>
-          )}
-
-          {/* 3. DISTRACT STAGE */}
-          {stage === STAGES.DISTRACT && (
-            <div className="text-center animate-in fade-in duration-300">
-              <div className="flex justify-center items-center gap-6 mb-12">
-                {config.distractorMode === 'count' ? (
-                  <div className="px-8 py-3 bg-white border-2 border-amber-200 text-amber-600 rounded-3xl text-2xl font-black shadow-sm">
-                    正確答對：{stats.distractorCorrect} / {config.distractorTarget}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-4">
-                    <div className="px-8 py-3 bg-white border-2 border-red-200 text-red-500 rounded-3xl text-3xl font-black flex items-center gap-3 shadow-sm">
-                      <Clock className="animate-pulse" /> {timerLeft}
-                    </div>
-                  </div>
-                )}
-              </div>
-              
-              <h3 className="text-2xl font-black mb-8 text-slate-400 uppercase tracking-widest">文字內容 與 顏色 是否一致？</h3>
-              
-              <div className={`mb-12 py-24 bg-white rounded-[4rem] border-4 transition-all duration-300 relative shadow-inner ${
-                lastFeedback === 'correct' ? 'border-green-400 bg-green-50/30' : 
-                lastFeedback === 'wrong' ? 'border-red-400 bg-red-50/30 shake' : 'border-slate-50'
-              }`}>
-                <span className="text-[7.5rem] font-black tracking-widest" style={{ color: distractorTask.color }}>
-                  {distractorTask.word}
-                </span>
-                
-                {lastFeedback === 'correct' && <div className="absolute top-10 right-10 text-green-500 animate-in zoom-in"><CheckCircle2 size={64} /></div>}
-                {lastFeedback === 'wrong' && <div className="absolute top-10 right-10 text-red-500 animate-in zoom-in"><X size={64} /></div>}
-              </div>
-
-              <div className="grid grid-cols-2 gap-10 max-w-2xl mx-auto">
-                <button 
-                  disabled={lastFeedback !== null}
-                  onClick={() => handleDistractorAnswer(true)}
-                  className="bg-green-500 hover:bg-green-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg shadow-green-100 active:scale-95 transition-all disabled:opacity-50"
-                >
-                  是
-                </button>
-                <button 
-                  disabled={lastFeedback !== null}
-                  onClick={() => handleDistractorAnswer(false)}
-                  className="bg-red-500 hover:bg-red-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg shadow-red-100 active:scale-95 transition-all disabled:opacity-50"
-                >
-                  否
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* 4. RECALL STAGE */}
-          {stage === STAGES.RECALL && (
-            <div className="animate-in fade-in duration-500">
-              <div className="text-center mb-8">
-                <h3 className="text-3xl font-black text-slate-900">延遲回憶挑戰</h3>
-                <p className="text-slate-400 mt-1">請在下列選項中找出剛才記憶的物品</p>
-              </div>
-
-              <div className="flex justify-center mb-8">
-                <div className="px-10 py-4 bg-indigo-600 text-white rounded-[2rem] font-black text-3xl shadow-xl ring-8 ring-indigo-50 flex items-center gap-4">
-                   {selections.length} <span className="text-indigo-300 text-xl">/</span> {targets.length}
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mb-12">
-                {options.map(item => {
-                  const isSelected = selections.find(s => s.id === item.id);
-                  return (
-                    <button 
-                      key={item.id} 
-                      onClick={() => toggleSelection(item)} 
-                      className={`relative p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center ${
-                        isSelected 
-                        ? 'border-indigo-500 bg-indigo-50/50 scale-95 shadow-inner' 
-                        : 'border-slate-100 bg-white hover:border-slate-200 shadow-sm'
-                      } ${config.showIcons ? 'h-44' : 'h-32'}`}
-                    >
-                      {config.showIcons && <div className="mb-2">{renderItemIcon(item.icon, "text-5xl")}</div>}
-                      <div className={`font-black text-slate-700 ${config.showIcons ? 'text-xl' : 'text-2xl'}`}>{item.name}</div>
-                      {isSelected && (
-                        <div className="absolute top-4 right-4 bg-indigo-500 text-white rounded-full p-1 shadow-md">
-                          <CheckCircle2 size={24} />
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              
-              <button 
-                onClick={finishGame} 
-                disabled={selections.length < targets.length}
-                className={`w-full py-6 rounded-[2.5rem] text-2xl font-black shadow-2xl transition-all ${
-                  selections.length < targets.length ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black'
-                }`}
-              >
-                {selections.length < targets.length ? `還差 ${targets.length - selections.length} 個答案` : '完成練習，查看深度報告'}
-              </button>
-            </div>
-          )}
-
-          {/* 5. RESULT REPORT STAGE */}
-          {stage === STAGES.RESULT && (
-            <div className="animate-in zoom-in duration-500">
-              <div className="text-center mb-10">
-                <div className="inline-block p-4 bg-slate-50 border border-slate-100 rounded-3xl text-indigo-600 mb-4 shadow-sm"><FileText size={40}/></div>
-                <h3 className="text-4xl font-black text-slate-900">訓練報告</h3>
-                <p className="text-slate-400 font-bold">{currentDisplay.date}</p>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                <div className="bg-white rounded-[3rem] p-10 border-2 border-slate-50 shadow-sm text-center flex flex-col justify-center">
-                  <p className="text-slate-400 font-black mb-2 uppercase tracking-widest text-sm">回憶準確率</p>
-                  <div className="text-[6rem] font-black text-slate-900 leading-none mb-6">
-                    {Math.round((currentDisplay.score / currentDisplay.targets.length) * 100)}<span className="text-2xl ml-1">%</span>
-                  </div>
-                  <div className="flex justify-center gap-3">
-                    {currentDisplay.targets.map((t, idx) => (
-                      <div key={idx} className={`w-4 h-4 rounded-full ${currentDisplay.selections.some(s => s.id === t.id) ? 'bg-green-500' : 'bg-red-400'}`}></div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="bg-indigo-600 rounded-[3rem] p-10 text-white shadow-xl flex flex-col justify-center">
-                  <p className="text-indigo-200 font-black mb-6 uppercase tracking-widest text-sm">干擾任務數據</p>
-                  <div className="space-y-5">
-                    <StatItem label="挑戰模式" val={currentDisplay.config.distractorMode === 'count' ? '次數達標' : '計時挑戰'} />
-                    <StatItem label="答題總數" val={currentDisplay.stats.distractorTotal} />
-                    <StatItem label="答題正確率" val={`${Math.round((currentDisplay.stats.distractorCorrect / currentDisplay.stats.distractorTotal) * 100 || 0)}%`} />
-                    <StatItem label="平均反應時" val={`${Math.round(currentDisplay.stats.reactionTimes.reduce((a,b)=>a+b,0)/currentDisplay.stats.reactionTimes.length || 0)} ms`} />
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 rounded-[2.5rem] p-8 mb-10">
-                <div className="flex items-center gap-2 font-black text-slate-800 mb-6 px-2"><Target size={24} className="text-indigo-500" /> 記憶物件追蹤</div>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  {currentDisplay.targets.map(t => (
-                    <div key={t.id} className="flex items-center gap-3 px-5 py-4 bg-white rounded-2xl shadow-sm border border-slate-100">
-                      <span className="text-3xl shrink-0">{t.icon}</span>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-black text-slate-700 truncate">{t.name}</div>
-                        <div className="text-[10px] font-bold text-slate-400 uppercase">Target Item</div>
-                      </div>
-                      {currentDisplay.selections.some(s => s.id === t.id) ? <CheckCircle2 size={20} className="text-green-500 shrink-0" /> : <X size={20} className="text-red-400 shrink-0" />}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex gap-4">
-                <button onClick={() => { setViewingRecord(null); setStage(STAGES.START); }} className="flex-1 flex items-center justify-center gap-3 bg-slate-900 text-white py-6 rounded-3xl text-xl font-black hover:bg-black shadow-xl transition-all active:scale-95">
-                  <RotateCcw size={24} /> {viewingRecord ? "回到主畫面" : "再挑戰一次"}
-                </button>
-                <button onClick={() => setStage(STAGES.HISTORY)} className="flex-1 flex items-center justify-center gap-3 bg-white border-2 border-slate-100 text-slate-600 py-6 rounded-3xl text-xl font-black hover:bg-slate-50 shadow-md transition-all">
-                  <History size={24} /> 查看歷史成績
-                </button>
-              </div>
-            </div>
-          )}
-
-          {stage === STAGES.HISTORY && (
-            <div className="animate-in fade-in duration-400">
-              <div className="flex justify-between items-center mb-10">
-                <h3 className="text-3xl font-black text-slate-900 flex items-center gap-4">
-                  <div className="p-2 bg-indigo-50 rounded-xl text-indigo-600"><History size={32} /></div> 訓練歷史紀錄
-                </h3>
-                <button onClick={() => setStage(STAGES.START)} className="p-2 hover:bg-slate-100 rounded-full transition-colors"><X size={36} className="text-slate-400"/></button>
-              </div>
-              
-              <div className="space-y-4 max-h-[500px] overflow-y-auto pr-3 custom-scrollbar">
-                {practiceHistory.length === 0 ? (
-                  <div className="text-center py-24 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200">
-                    <BarChart3 size={64} className="mx-auto text-slate-200 mb-6" />
-                    <p className="text-slate-400 font-black text-xl">目前還沒有訓練數據</p>
-                    <button onClick={() => setStage(STAGES.START)} className="mt-4 text-indigo-600 font-black underline underline-offset-4">立刻開始訓練</button>
-                  </div>
-                ) : (
-                  practiceHistory.map(record => (
-                    <button 
-                      key={record.id} 
-                      onClick={() => showHistoryRecord(record)}
-                      className="w-full bg-white border-2 border-slate-50 p-6 rounded-[2rem] flex justify-between items-center hover:border-indigo-300 hover:shadow-lg transition-all group text-left shadow-sm"
-                    >
-                      <div className="flex-1">
-                        <div className="text-xs font-black text-slate-300 mb-2 uppercase tracking-widest">{record.date}</div>
-                        <div className="text-xl font-black text-slate-800 group-hover:text-indigo-700 transition-colors">
-                          記憶 {record.config.targetCount} 項挑戰
-                        </div>
-                        <div className="text-sm text-slate-400 font-bold mt-1 flex gap-2 items-center">
-                          <Clock size={14}/> {record.config.distractorMode === 'count' ? '達標模式' : '限時挑戰'}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <div className={`text-4xl font-black ${record.stats.finalScore === record.config.targetCount ? 'text-green-500' : 'text-indigo-600'}`}>
-                            {Math.round((record.stats.finalScore / record.config.targetCount) * 100)}%
-                          </div>
-                          <div className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Accuracy</div>
-                        </div>
-                        <ChevronRight className="text-slate-200 group-hover:text-indigo-500 group-hover:translate-x-1 transition-all" size={28} />
-                      </div>
-                    </button>
-                  ))
-                )}
-              </div>
-              
-              <button onClick={() => setStage(STAGES.START)} className="w-full mt-10 bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xl shadow-xl hover:bg-black transition-all">回到初始設定</button>
-            </div>
-          )}
-        </div>
-
-        {/* 題庫管理中心 (Modal) */}
-        {showPool && (
-          <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-xl p-4 flex items-center justify-center">
-            <div className="bg-white w-full max-h-[92%] rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col border border-white/20 animate-in zoom-in duration-300">
-              <div className="p-8 bg-slate-50 border-b flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-white rounded-2xl shadow-sm text-indigo-600">
-                    <Package size={28} />
-                  </div>
-                  <div>
-                    <h4 className="text-2xl font-black text-slate-900">訓練題庫中心</h4>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Training Assets Library</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowPool(false)} className="p-2.5 bg-white border border-slate-100 hover:bg-red-50 hover:text-red-500 rounded-full transition-all text-slate-400 shadow-sm">
-                  <X size={32} />
-                </button>
-              </div>
-
-              <div className="p-8 bg-white border-b shadow-sm">
-                <p className="text-xs font-black text-slate-300 mb-4 uppercase tracking-widest">新增生活詞彙</p>
-                <form onSubmit={handleAddNewItem} className="flex gap-4">
-                  <input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="例如：放大鏡、拐杖..." className="flex-1 p-4 border-2 border-slate-50 rounded-2xl focus:border-indigo-400 outline-none font-bold text-lg bg-slate-50/50" />
-                  <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="p-4 border-2 border-slate-50 rounded-2xl bg-slate-50/50 font-bold outline-none focus:border-indigo-400 text-slate-600">
-                    {wordLibrary.map(cat => <option key={cat.category} value={cat.category}>{cat.category}</option>)}
-                  </select>
-                  <button type="submit" className="bg-slate-900 text-white px-8 rounded-2xl font-black text-lg hover:bg-black transition-all shadow-lg active:scale-95">新增詞彙</button>
-                </form>
-              </div>
-
-              <div className="p-8 overflow-y-auto space-y-12 bg-slate-50/20 custom-scrollbar">
-                {wordLibrary.map(set => (
-                  <div key={set.category}>
-                    <h5 className="font-black text-slate-900 mb-6 flex items-center gap-3 text-xl">
-                      <div className="w-2.5 h-6 bg-indigo-500 rounded-full"></div>
-                      {set.category} <span className="text-slate-300 font-bold text-sm ml-auto">ITEMS: {set.items.length}</span>
-                    </h5>
-                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
-                      {set.items.map(item => (
-                        <div key={item.id} className="group relative p-5 bg-white rounded-3xl text-center shadow-sm border border-slate-100 flex flex-col items-center hover:border-indigo-200 transition-all hover:shadow-md min-h-[110px] justify-center">
-                          <button onClick={() => handleDeleteItem(set.category, item.id)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10 hover:scale-110 active:scale-90 shadow-red-100"><Trash2 size={14} /></button>
-                          <div className="mb-2">{renderItemIcon(item.icon, "text-4xl")}</div>
-                          <div className="text-xs font-black text-slate-600 truncate w-full">{item.name}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Footer info - 加入作者資訊與連結 */}
-        <div className="bg-slate-50 p-6 border-t border-slate-100 flex flex-col items-center gap-4">
-          <div className="flex justify-center gap-6 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-            <div className="flex items-center gap-1"><Home size={12}/> Living</div>
-            <div className="flex items-center gap-1"><Brain size={12}/> Memory</div>
-            <div className="flex items-center gap-1"><Eye size={12}/> Cognitive</div>
-          </div>
-          <div className="text-slate-400 text-xs font-bold border-t border-slate-200 pt-4 w-full text-center">
-            設計：<a href="https://www.facebook.com/mpotkevin" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 transition-colors underline decoration-indigo-200 underline-offset-4 decoration-2">職能治療師 - 鄭凱文</a>
-          </div>
-        </div>
-
-      </div>
-
-      <style>{`
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>延遲記憶王 - 職能治療師 鄭凱文設計</title>
+    <!-- React & Babel CDN -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap');
+        body { font-family: 'Noto Sans TC', sans-serif; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-12px); } 75% { transform: translateX(12px); } }
         .shake { animation: shake 0.2s cubic-bezier(.36,.07,.19,.97) both; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
         .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
-      `}</style>
-    </div>
-  );
-}
+    </style>
+</head>
+<body class="bg-slate-50">
+    <div id="root"></div>
 
-// 輔助組件：緊湊型設定卡片
-function CompactConfig({ icon, title, val, onUp, onDown }) {
-  return (
-    <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center transition-all hover:border-indigo-100 hover:bg-white group">
-      <div className="flex items-center gap-2 mb-4">
-        {icon}
-        <span className="text-sm font-black text-slate-500 uppercase tracking-wider">{title}</span>
-      </div>
-      <Counter val={val} onUp={onUp} onDown={onDown} size="sm" />
-    </div>
-  );
-}
+    <script type="text/babel">
+        const { useState, useEffect, useCallback, useRef } = React;
 
-// 輔助組件：計數器
-function Counter({ val, onUp, onDown, size="md" }) {
-  const btnClass = size === "md" ? "w-12 h-12" : "w-10 h-10";
-  const textClass = size === "md" ? "text-3xl" : "text-xl";
-  return (
-    <div className="flex items-center gap-5">
-      <button onClick={onDown} className={`${btnClass} rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 hover:text-indigo-600 hover:border-indigo-200 transition-all`}><Minus size={18} /></button>
-      <span className={`${textClass} font-black min-w-[32px] text-center text-slate-800 tracking-tighter`}>{val}</span>
-      <button onClick={onUp} className={`${btnClass} rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90 hover:text-indigo-600 hover:border-indigo-200 transition-all`}><Plus size={18} /></button>
-    </div>
-  );
-}
+        // 預設詞彙題庫
+        const INITIAL_WORD_SETS = [
+            { category: "客廳與居家", items: [
+                { id: 'l1', name: '電視', icon: '📺' }, { id: 'l2', name: '沙發', icon: '🛋️' }, { id: 'l3', name: '遙控器', icon: '🕹️' },
+                { id: 'l4', name: '電風扇', icon: '🌀' }, { id: 'l5', name: '電話', icon: '☎️' }, { id: 'l6', name: '茶几', icon: '🍵' },
+                { id: 'l7', name: '時鐘', icon: '⏰' }, { id: 'l8', name: '報紙', icon: '📰' }, { id: 'l9', name: '檯燈', icon: '💡' }, { id: 'l10', name: '冷氣', icon: '❄️' }
+            ]},
+            { category: "廚房與飲食", items: [
+                { id: 'k1', name: '湯匙', icon: '🥄' }, { id: 'k2', name: '筷子', icon: '🥢' }, { id: 'k3', name: '碗公', icon: '🥣' },
+                { id: 'k4', name: '叉子', icon: '🍴' }, { id: 'k5', name: '糖果', icon: '🍬' }, { id: 'k6', name: '盤子', icon: '🍽️' },
+                { id: 'k7', name: '電鍋', icon: '🍚' }, { id: 'k8', name: '菜刀', icon: '🔪' }, { id: 'k9', name: '水壺', icon: '🍶' }, { id: 'k10', name: '冰箱', icon: '🧊' }
+            ]},
+            { category: "臥室用品", items: [
+                { id: 'b1', name: '枕頭', icon: '💤' }, { id: 'b2', name: '棉被', icon: '🛌' }, { id: 'b3', name: '床墊', icon: '🛏️' },
+                { id: 'b4', name: '衣櫃', icon: '🚪' }, { id: 'b5', name: '梳子', icon: '🪮' }, { id: 'b6', name: '鏡子', icon: '🪞' },
+                { id: 'b7', name: '睡衣', icon: '👕' }, { id: 'b8', name: '鬧鐘', icon: '🔔' }, { id: 'b9', name: '拖鞋', icon: '🩴' }, { id: 'b10', name: '窗簾', icon: '🖼️' }
+            ]},
+            { category: "外出必備", items: [
+                { id: 'o1', name: '雨傘', icon: '🌂' }, { id: 'o2', name: '帽子', icon: '👒' }, { id: 'o3', name: '口罩', icon: '😷' },
+                { id: 'o4', name: '鑰匙', icon: '🔑' }, { id: 'o5', name: '錢包', icon: '👛' }, { id: 'o6', name: '手機', icon: '📱' },
+                { id: 'o7', name: '自行車', icon: '🚲' }, { id: 'o8', name: '公車', icon: '🚌' }, { id: 'o9', name: '悠遊卡', icon: '💳' }, { id: 'o10', name: '手電筒', icon: '🔦' }
+            ]},
+            { category: "休閒興趣", items: [
+                { id: 'h1', name: '象棋', icon: '♟️' }, { id: 'h2', name: '撲克牌', icon: '🃏' }, { id: 'h3', name: '收音機', icon: '📻' },
+                { id: 'h4', name: '盆栽', icon: '🪴' }, { id: 'h5', name: '魚竿', icon: '🎣' }, { id: 'h6', name: '相機', icon: '📷' },
+                { id: 'h7', name: '毛線', icon: '🧶' }, { id: 'h8', name: '鋼琴', icon: '🎹' }, { id: 'h9', name: '毛筆', icon: '🖌️' }, { id: 'h10', name: '放大鏡', icon: '🔍' }
+            ]}
+        ];
 
-// 輔助組件：數據項目
-function StatItem({ label, val }) {
-  return (
-    <div className="flex justify-between items-center border-b border-indigo-500/30 pb-3">
-      <span className="text-indigo-100 font-bold text-sm">{label}</span>
-      <span className="font-black text-xl">{val}</span>
-    </div>
-  );
-}
+        const STAGES = { START: 'START', MEMORIZE: 'MEMORIZE', DISTRACT: 'DISTRACT', RECALL: 'RECALL', RESULT: 'RESULT', HISTORY: 'HISTORY' };
+
+        const COLORS = [
+            { name: '紅色', color: '#ef4444' }, 
+            { name: '藍色', color: '#3b82f6' },
+            { name: '綠色', color: '#22c55e' }, 
+            { name: '黃色', color: '#F2CD13' }, 
+            { name: '紫色', color: '#a855f7' }, 
+            { name: '橘色', color: '#f97316' },
+            { name: '粉色', color: '#f472b6' }, 
+            { name: '棕色', color: '#92400e' },
+            { name: '黑色', color: '#000000' }, 
+            { name: '灰色', color: '#94a3b8' }
+        ];
+
+        // 簡單的圖示組件 (代替 Lucide 庫在 CDN 下的使用)
+        const Icon = ({ name, size = 24, className = "" }) => {
+            return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
+        };
+
+        function App() {
+            const [stage, setStage] = useState(STAGES.START);
+            const [wordLibrary, setWordLibrary] = useState(INITIAL_WORD_SETS);
+            const [currentSet, setCurrentSet] = useState(null);
+            const [targets, setTargets] = useState([]);
+            const [options, setOptions] = useState([]);
+            const [selections, setSelections] = useState([]);
+            const [distractorTask, setDistractorTask] = useState({ word: '', color: '', isMatch: false });
+            const [showPool, setShowPool] = useState(false);
+            const [lastFeedback, setLastFeedback] = useState(null);
+            const [score, setScore] = useState(0);
+            const [viewingRecord, setViewingRecord] = useState(null);
+
+            const distractorHistory = useRef({ matchCount: 0, mismatchCount: 0 });
+            const [timerLeft, setTimerLeft] = useState(0);
+            const [stats, setStats] = useState({
+                startTime: 0, endTime: 0, distractorTotal: 0, distractorCorrect: 0, distractorWrong: 0, reactionTimes: [], lastActionTime: 0
+            });
+
+            const [practiceHistory, setPracticeHistory] = useState([]);
+            const [newItem, setNewItem] = useState({ name: '', category: '客廳與居家' });
+
+            const [config, setConfig] = useState({
+                targetCount: 3, distractorMode: 'count', distractorTarget: 5, distractorDuration: 30, recallDistractorCount: 3, showIcons: true
+            });
+
+            useEffect(() => {
+                // 每當畫面更新時渲染圖示
+                if (window.lucide) window.lucide.createIcons();
+            });
+
+            const updateConfig = (key, val) => setConfig(prev => ({ ...prev, [key]: val }));
+
+            const startGame = () => {
+                const availableCategories = wordLibrary.filter(c => c.items.length >= config.targetCount);
+                if (availableCategories.length === 0) return alert("題庫內容不足！");
+                const randomSet = availableCategories[Math.floor(Math.random() * availableCategories.length)];
+                const shuffledItems = [...randomSet.items].sort(() => 0.5 - Math.random());
+                const targetItems = shuffledItems.slice(0, config.targetCount);
+                setCurrentSet(randomSet);
+                setTargets(targetItems);
+                setSelections([]);
+                setLastFeedback(null);
+                setScore(0);
+                setViewingRecord(null);
+                setStats({ startTime: Date.now(), endTime: 0, distractorTotal: 0, distractorCorrect: 0, distractorWrong: 0, reactionTimes: [], lastActionTime: 0 });
+                distractorHistory.current = { matchCount: 0, mismatchCount: 0 };
+                setStage(STAGES.MEMORIZE);
+            };
+
+            const nextDistractor = useCallback(() => {
+                const history = distractorHistory.current;
+                let shouldMatch;
+                if (history.matchCount > history.mismatchCount + 1) shouldMatch = false;
+                else if (history.mismatchCount > history.matchCount + 1) shouldMatch = true;
+                else shouldMatch = Math.random() > 0.5;
+                const wordObj = COLORS[Math.floor(Math.random() * COLORS.length)];
+                let colorObj;
+                if (shouldMatch) {
+                    colorObj = wordObj;
+                    history.matchCount++;
+                } else {
+                    const otherColors = COLORS.filter(c => c.name !== wordObj.name);
+                    colorObj = otherColors[Math.floor(Math.random() * otherColors.length)];
+                    history.mismatchCount++;
+                }
+                setDistractorTask({ word: wordObj.name, color: colorObj.color, isMatch: shouldMatch });
+                setStats(prev => ({ ...prev, lastActionTime: Date.now() }));
+            }, []);
+
+            const handleDistractorAnswer = (answer) => {
+                const isCorrect = answer === distractorTask.isMatch;
+                const now = Date.now();
+                const reactionTime = now - stats.lastActionTime;
+                setStats(prev => ({
+                    ...prev,
+                    distractorTotal: prev.distractorTotal + 1,
+                    distractorCorrect: isCorrect ? prev.distractorCorrect + 1 : prev.distractorCorrect,
+                    distractorWrong: !isCorrect ? prev.distractorWrong + 1 : prev.distractorWrong,
+                    reactionTimes: [...prev.reactionTimes, reactionTime]
+                }));
+                if (isCorrect) {
+                    setLastFeedback('correct');
+                    const currentCorrect = stats.distractorCorrect + 1;
+                    if (config.distractorMode === 'count' && currentCorrect >= config.distractorTarget) {
+                        setTimeout(() => prepareRecall(), 400);
+                    } else {
+                        setTimeout(() => { setLastFeedback(null); nextDistractor(); }, 400);
+                    }
+                } else {
+                    setLastFeedback('wrong');
+                    setTimeout(() => { setLastFeedback(null); nextDistractor(); }, 600);
+                }
+            };
+
+            useEffect(() => {
+                let timer;
+                if (stage === STAGES.DISTRACT && config.distractorMode === 'time') {
+                    setTimerLeft(config.distractorDuration);
+                    timer = setInterval(() => {
+                        setTimerLeft(prev => {
+                            if (prev <= 1) {
+                                clearInterval(timer);
+                                prepareRecall();
+                                return 0;
+                            }
+                            return prev - 1;
+                        });
+                    }, 1000);
+                }
+                return () => clearInterval(timer);
+            }, [stage, config.distractorMode, config.distractorDuration]);
+
+            const prepareRecall = () => {
+                const distractorsPool = currentSet.items.filter(item => !targets.some(t => t.id === item.id));
+                const selectedDistractors = [...distractorsPool].sort(() => 0.5 - Math.random()).slice(0, config.recallDistractorCount);
+                const combined = [...targets, ...selectedDistractors].sort(() => 0.5 - Math.random());
+                setOptions(combined);
+                setStage(STAGES.RECALL);
+            };
+
+            const toggleSelection = (item) => {
+                if (selections.find(s => s.id === item.id)) {
+                    setSelections(selections.filter(s => s.id !== item.id));
+                } else if (selections.length < targets.length) {
+                    setSelections([...selections, item]);
+                }
+            };
+
+            const finishGame = () => {
+                const correctCount = selections.filter(s => targets.find(t => t.id === s.id)).length;
+                const finalStats = { ...stats, endTime: Date.now(), finalScore: correctCount };
+                setScore(correctCount);
+                const record = {
+                    id: Date.now(), date: new Date().toLocaleString(), config: { ...config },
+                    targetItems: targets.map(t => ({ name: t.name, icon: t.icon, id: t.id })),
+                    stats: finalStats,
+                    selections: selections.map(s => ({ id: s.id, name: s.name, icon: s.icon, isCorrect: targets.some(t => t.id === s.id) }))
+                };
+                setPracticeHistory(prev => [record, ...prev]);
+                setStage(STAGES.RESULT);
+            };
+
+            const showHistoryRecord = (record) => {
+                setViewingRecord(record);
+                setStage(STAGES.RESULT);
+            };
+
+            const handleDeleteItem = (categoryId, itemId) => {
+                setWordLibrary(prev => prev.map(cat => (cat.category === categoryId ? { ...cat, items: cat.items.filter(item => item.id !== itemId) } : cat)));
+            };
+
+            const handleAddNewItem = (e) => {
+                e.preventDefault();
+                if (!newItem.name.trim()) return;
+                const itemToAdd = { id: `custom-${Date.now()}`, name: newItem.name, icon: '📦' };
+                setWordLibrary(prev => prev.map(cat => cat.category === newItem.category ? { ...cat, items: [itemToAdd, ...cat.items] } : cat));
+                setNewItem({ ...newItem, name: '' });
+            };
+
+            useEffect(() => { if (stage === STAGES.DISTRACT) nextDistractor(); }, [stage, nextDistractor]);
+
+            const currentDisplay = viewingRecord ? {
+                score: viewingRecord.stats.finalScore, targets: viewingRecord.targetItems, stats: viewingRecord.stats,
+                config: viewingRecord.config, selections: viewingRecord.selections, date: viewingRecord.date
+            } : {
+                score: score, targets: targets, stats: stats, config: config, selections: selections, date: new Date().toLocaleString()
+            };
+
+            return (
+                <div className="min-h-screen p-2 md:p-8">
+                    <div className="max-w-3xl mx-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden relative border border-slate-100">
+                        {/* Header */}
+                        <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <div className="p-2.5 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
+                                    <Icon name="brain" />
+                                </div>
+                                <div>
+                                    <h1 className="text-2xl font-black tracking-tight text-slate-900">延遲記憶王</h1>
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Cognitive Mastery Pro</p>
+                                </div>
+                            </div>
+                            <div className="flex gap-2">
+                                <button onClick={() => setStage(STAGES.HISTORY)} className="p-2.5 bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-all border border-slate-100">
+                                    <Icon name="history" size={22} />
+                                </button>
+                                <button onClick={() => setShowPool(true)} className="flex items-center gap-2 bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-slate-100">
+                                    <Icon name="package" size={20} /> 管理題庫
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="p-6 md:p-10">
+                            {stage === STAGES.START && (
+                                <div className="animate-in fade-in zoom-in duration-500">
+                                    <div className="text-center mb-10">
+                                        <div className="inline-block mb-4 px-4 py-1 bg-indigo-50 text-indigo-600 rounded-full text-sm font-black">DAILY TRAINING</div>
+                                        <h2 className="text-4xl font-black text-slate-900 mb-2">準備開始訓練</h2>
+                                        <p className="text-slate-400">客製化您的認知挑戰模式</p>
+                                    </div>
+                                    <div className="space-y-4 mb-10 max-w-xl mx-auto">
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center">
+                                                <div className="flex items-center gap-2 mb-4 text-indigo-500"><Icon name="target" size={20} /><span className="text-sm font-black text-slate-500">物品記憶</span></div>
+                                                <div className="flex items-center gap-5">
+                                                    <button onClick={() => updateConfig('targetCount', Math.max(1, config.targetCount - 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="minus" size={18} /></button>
+                                                    <span className="text-xl font-black min-w-[32px] text-center">{config.targetCount}</span>
+                                                    <button onClick={() => updateConfig('targetCount', Math.min(10, config.targetCount + 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="plus" size={18} /></button>
+                                                </div>
+                                            </div>
+                                            <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center">
+                                                <div className="flex items-center gap-2 mb-4 text-amber-500"><Icon name="layers" size={20} /><span className="text-sm font-black text-slate-500">回憶混淆</span></div>
+                                                <div className="flex items-center gap-5">
+                                                    <button onClick={() => updateConfig('recallDistractorCount', Math.max(0, config.recallDistractorCount - 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="minus" size={18} /></button>
+                                                    <span className="text-xl font-black min-w-[32px] text-center">{config.recallDistractorCount}</span>
+                                                    <button onClick={() => updateConfig('recallDistractorCount', Math.min(15, config.recallDistractorCount + 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="plus" size={18} /></button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-slate-50/50 p-6 rounded-[2rem] border-2 border-slate-100">
+                                            <div className="flex justify-between items-center mb-5">
+                                                <div className="flex items-center gap-2"><Icon name="zap" size={18} className="text-indigo-600" /><span className="text-lg font-black text-slate-700">任務切換模式</span></div>
+                                                <div className="flex bg-slate-200 p-1 rounded-xl">
+                                                    <button onClick={() => updateConfig('distractorMode', 'count')} className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'count' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>次數達標</button>
+                                                    <button onClick={() => updateConfig('distractorMode', 'time')} className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'time' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>計時挑戰</button>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center justify-center py-2">
+                                                <div className="flex items-center gap-8">
+                                                    <span className="text-sm font-bold text-slate-400 uppercase">{config.distractorMode === 'count' ? '目標正確題數' : '挑戰秒數'}</span>
+                                                    <div className="flex items-center gap-5">
+                                                        <button onClick={() => config.distractorMode === 'count' ? updateConfig('distractorTarget', Math.max(1, config.distractorTarget - 1)) : updateConfig('distractorDuration', Math.max(10, config.distractorDuration - 10))} className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 active:scale-90"><Icon name="minus" size={20} /></button>
+                                                        <span className="text-3xl font-black min-w-[50px] text-center text-indigo-700">{config.distractorMode === 'count' ? config.distractorTarget : config.distractorDuration}</span>
+                                                        <button onClick={() => config.distractorMode === 'count' ? updateConfig('distractorTarget', Math.min(50, config.distractorTarget + 1)) : updateConfig('distractorDuration', Math.min(120, config.distractorDuration + 10))} className="w-12 h-12 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 active:scale-90"><Icon name="plus" size={20} /></button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => updateConfig('showIcons', !config.showIcons)} className={`w-full p-5 rounded-[2rem] border-2 transition-all flex items-center justify-between ${config.showIcons ? 'bg-indigo-50/50 border-indigo-100 text-indigo-700' : 'bg-slate-50/50 border-slate-100 text-slate-400'}`}>
+                                            <div className="flex items-center gap-3"><Icon name={config.showIcons ? "eye" : "eye-off"} size={22}/><span className="text-lg font-black">圖片輔助模式</span></div>
+                                            <div className={`w-12 h-6 rounded-full relative transition-colors ${config.showIcons ? 'bg-indigo-600' : 'bg-slate-300'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.showIcons ? 'left-7' : 'left-1'}`}></div></div>
+                                        </button>
+                                    </div>
+                                    <button onClick={startGame} className="w-full max-w-xl mx-auto block bg-slate-900 hover:bg-black text-white text-xl font-black py-6 rounded-[2.5rem] shadow-2xl transition-all active:scale-95 group">
+                                        <div className="flex items-center justify-center gap-2">啟動訓練大腦 <Icon name="arrow-right" className="group-hover:translate-x-2 transition-transform" /></div>
+                                    </button>
+                                </div>
+                            )}
+
+                            {stage === STAGES.MEMORIZE && (
+                                <div className="animate-in slide-in-from-right duration-500">
+                                    <div className="text-center mb-8"><h3 className="text-3xl font-black text-slate-900 mb-2">請記住以下物品</h3><div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full text-slate-500 font-bold text-sm"><Icon name="package" size={16}/> 當前類別：{currentSet.category}</div></div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-12">
+                                        {targets.map(item => (
+                                            <div key={item.id} className="bg-white border-2 border-slate-100 rounded-[2.5rem] p-6 text-center shadow-sm flex flex-col items-center justify-center min-h-[180px]">
+                                                {config.showIcons && <div className="text-6xl mb-4">{item.icon}</div>}
+                                                <div className={`font-black text-slate-800 ${config.showIcons ? 'text-2xl' : 'text-4xl'}`}>{item.name}</div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <button onClick={() => setStage(STAGES.DISTRACT)} className="w-full bg-indigo-600 text-white text-2xl font-black py-6 rounded-[2rem] shadow-xl">記好了，進入「任務切換」挑戰</button>
+                                </div>
+                            )}
+
+                            {stage === STAGES.DISTRACT && (
+                                <div className="text-center animate-in fade-in duration-300">
+                                    <div className="flex justify-center mb-12">
+                                        <div className={`px-8 py-3 bg-white border-2 rounded-3xl text-2xl font-black shadow-sm ${config.distractorMode === 'count' ? 'border-amber-200 text-amber-600' : 'border-red-200 text-red-500'}`}>
+                                            {config.distractorMode === 'count' ? `已答對：${stats.distractorCorrect} / ${config.distractorTarget}` : `剩餘時間：${timerLeft} 秒`}
+                                        </div>
+                                    </div>
+                                    <h3 className="text-2xl font-black mb-8 text-slate-400 uppercase tracking-widest">文字內容 與 顏色 是否一致？</h3>
+                                    <div className={`mb-12 py-24 bg-white rounded-[4rem] border-4 transition-all relative ${lastFeedback === 'correct' ? 'border-green-400 bg-green-50/30' : lastFeedback === 'wrong' ? 'border-red-400 bg-red-50/30 shake' : 'border-slate-50'}`}>
+                                        <span className="text-[7.5rem] font-black tracking-widest" style={{ color: distractorTask.color }}>{distractorTask.word}</span>
+                                        {lastFeedback === 'correct' && <div className="absolute top-10 right-10 text-green-500"><Icon name="check-circle-2" size={64} /></div>}
+                                        {lastFeedback === 'wrong' && <div className="absolute top-10 right-10 text-red-500"><Icon name="x" size={64} /></div>}
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-10 max-w-2xl mx-auto">
+                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(true)} className="bg-green-500 hover:bg-green-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg active:scale-95 disabled:opacity-50">是</button>
+                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(false)} className="bg-red-500 hover:bg-red-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg active:scale-95 disabled:opacity-50">否</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {stage === STAGES.RECALL && (
+                                <div className="animate-in fade-in duration-500 text-center">
+                                    <h3 className="text-3xl font-black text-slate-900 mb-8">延遲回憶挑戰：剛才記住了什麼？</h3>
+                                    <div className="flex justify-center mb-10">
+                                        <div className="px-10 py-4 bg-indigo-600 text-white rounded-[2rem] font-black text-3xl shadow-xl ring-8 ring-indigo-50">{selections.length} / {targets.length}</div>
+                                    </div>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-5 mb-12">
+                                        {options.map(item => {
+                                            const isSelected = selections.find(s => s.id === item.id);
+                                            return (
+                                                <button key={item.id} onClick={() => toggleSelection(item)} className={`relative p-6 rounded-[2.5rem] border-2 transition-all flex flex-col items-center justify-center ${isSelected ? 'border-indigo-500 bg-indigo-50/50 scale-95 shadow-inner' : 'border-slate-100 bg-white hover:border-slate-200 shadow-sm'} ${config.showIcons ? 'h-44' : 'h-32'}`}>
+                                                    {config.showIcons && <div className="text-5xl mb-2">{item.icon}</div>}
+                                                    <div className={`font-black text-slate-700 ${config.showIcons ? 'text-xl' : 'text-2xl'}`}>{item.name}</div>
+                                                    {isSelected && <div className="absolute top-4 right-4 bg-indigo-500 text-white rounded-full p-1 shadow-md"><Icon name="check-circle-2" size={24} /></div>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <button onClick={finishGame} disabled={selections.length < targets.length} className={`w-full py-6 rounded-[2.5rem] text-2xl font-black shadow-2xl ${selections.length < targets.length ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white'}`}>{selections.length < targets.length ? `還差 ${targets.length - selections.length} 個答案` : '完成訓練，查看分析報告'}</button>
+                                </div>
+                            )}
+
+                            {stage === STAGES.RESULT && (
+                                <div className="animate-in zoom-in duration-500">
+                                    <div className="text-center mb-10">
+                                        <div className="inline-block p-4 bg-slate-50 border rounded-3xl text-indigo-600 mb-4 shadow-sm"><Icon name="file-text" size={40}/></div>
+                                        <h3 className="text-4xl font-black text-slate-900">訓練報告</h3>
+                                        <p className="text-slate-400 font-bold">{currentDisplay.date}</p>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
+                                        <div className="bg-white rounded-[3rem] p-10 border-2 border-slate-50 shadow-sm text-center">
+                                            <p className="text-slate-400 font-black mb-2 uppercase text-sm">回憶準確率</p>
+                                            <div className="text-[6rem] font-black text-slate-900 leading-none mb-6">{Math.round((currentDisplay.score / currentDisplay.targets.length) * 100)}<span className="text-2xl ml-1">%</span></div>
+                                            <div className="flex justify-center gap-3">{currentDisplay.targets.map((t, idx) => (<div key={idx} className={`w-4 h-4 rounded-full ${currentDisplay.selections.some(s => s.id === t.id) ? 'bg-green-500' : 'bg-red-400'}`}></div>))}</div>
+                                        </div>
+                                        <div className="bg-indigo-600 rounded-[3rem] p-10 text-white shadow-xl space-y-5">
+                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>挑戰模式</span><span className="font-bold">{currentDisplay.config.distractorMode === 'count' ? '次數達標' : '計時挑戰'}</span></div>
+                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>正確率</span><span className="font-bold">{Math.round((currentDisplay.stats.distractorCorrect / currentDisplay.stats.distractorTotal) * 100 || 0)}%</span></div>
+                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>反應時間</span><span className="font-bold">{Math.round(currentDisplay.stats.reactionTimes.reduce((a,b)=>a+b,0)/currentDisplay.stats.reactionTimes.length || 0)} ms</span></div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-50 rounded-[2.5rem] p-8 mb-10">
+                                        <div className="font-black text-slate-800 mb-6 px-2">記憶物件清單</div>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                                            {currentDisplay.targets.map(t => (
+                                                <div key={t.id} className="flex items-center gap-3 px-5 py-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
+                                                    <span className="text-3xl">{t.icon}</span>
+                                                    <div className="flex-1 font-black text-slate-700 truncate">{t.name}</div>
+                                                    {currentDisplay.selections.some(s => s.id === t.id) ? <Icon name="check-circle-2" className="text-green-500" /> : <Icon name="x" className="text-red-400" />}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-4">
+                                        <button onClick={() => { setViewingRecord(null); setStage(STAGES.START); }} className="flex-1 bg-slate-900 text-white py-6 rounded-3xl text-xl font-black shadow-xl active:scale-95">回到主畫面</button>
+                                        <button onClick={() => setStage(STAGES.HISTORY)} className="flex-1 bg-white border-2 border-slate-100 text-slate-600 py-6 rounded-3xl text-xl font-black shadow-md">歷史成績</button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {stage === STAGES.HISTORY && (
+                                <div className="animate-in fade-in duration-400">
+                                    <div className="flex justify-between items-center mb-10"><h3 className="text-3xl font-black text-slate-900">訓練歷史紀錄</h3><button onClick={() => setStage(STAGES.START)}><Icon name="x" size={36} className="text-slate-400"/></button></div>
+                                    <div className="space-y-4 max-h-[500px] overflow-y-auto pr-3 custom-scrollbar">
+                                        {practiceHistory.length === 0 ? <div className="text-center py-24 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-slate-400 font-black">目前尚無數據</div> : 
+                                            practiceHistory.map(record => (
+                                                <button key={record.id} onClick={() => showHistoryRecord(record)} className="w-full bg-white border-2 border-slate-50 p-6 rounded-[2rem] flex justify-between items-center hover:border-indigo-300 transition-all text-left shadow-sm">
+                                                    <div><div className="text-xs font-black text-slate-300 uppercase">{record.date}</div><div className="text-xl font-black text-slate-800">記憶 {record.config.targetCount} 項挑戰</div></div>
+                                                    <div className="flex items-center gap-6"><div className="text-right"><div className="text-4xl font-black text-indigo-600">{Math.round((record.stats.finalScore / record.config.targetCount) * 100)}%</div></div><Icon name="chevron-right" className="text-slate-200" size={28} /></div>
+                                                </button>
+                                            ))
+                                        }
+                                    </div>
+                                    <button onClick={() => setStage(STAGES.START)} className="w-full mt-10 bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xl">回到主頁</button>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Footer info */}
+                        <div className="bg-slate-50 p-6 border-t border-slate-100 flex flex-col items-center gap-4">
+                            <div className="flex justify-center gap-6 text-slate-400 text-[10px] font-black uppercase tracking-widest">
+                                <div className="flex items-center gap-1"><Icon name="home" size={12}/> Living</div>
+                                <div className="flex items-center gap-1"><Icon name="brain" size={12}/> Memory</div>
+                                <div className="flex items-center gap-1"><Icon name="eye" size={12}/> Cognitive</div>
+                            </div>
+                            <div className="text-slate-400 text-xs font-bold border-t border-slate-200 pt-4 w-full text-center">
+                                設計：<a href="https://www.facebook.com/mpotkevin" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 transition-colors underline decoration-indigo-200 underline-offset-4 decoration-2">職能治療師 - 鄭凱文</a>
+                            </div>
+                        </div>
+
+                        {/* 題庫彈窗 */}
+                        {showPool && (
+                            <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-xl p-4 flex items-center justify-center">
+                                <div className="bg-white w-full max-h-[92%] rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col">
+                                    <div className="p-8 bg-slate-50 border-b flex justify-between items-center">
+                                        <div className="flex items-center gap-4"><div className="p-3 bg-white rounded-2xl text-indigo-600"><Icon name="package" size={28} /></div><div><h4 className="text-2xl font-black">訓練題庫管理</h4></div></div>
+                                        <button onClick={() => setShowPool(false)} className="text-slate-400"><Icon name="x" size={32} /></button>
+                                    </div>
+                                    <div className="p-8 bg-white border-b">
+                                        <form onSubmit={handleAddNewItem} className="flex gap-4">
+                                            <input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="例如：放大鏡..." className="flex-1 p-4 border-2 border-slate-50 rounded-2xl font-bold bg-slate-50/50 outline-none focus:border-indigo-400" />
+                                            <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="p-4 border-2 border-slate-50 rounded-2xl font-bold bg-slate-50/50 text-slate-600">
+                                                {wordLibrary.map(cat => <option key={cat.category} value={cat.category}>{cat.category}</option>)}
+                                            </select>
+                                            <button type="submit" className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
+                                        </form>
+                                    </div>
+                                    <div className="p-8 overflow-y-auto space-y-12 bg-slate-50/20 custom-scrollbar">
+                                        {wordLibrary.map(set => (
+                                            <div key={set.category}>
+                                                <h5 className="font-black text-slate-900 mb-6 flex items-center gap-3 text-xl"><div className="w-2.5 h-6 bg-indigo-500 rounded-full"></div>{set.category}</h5>
+                                                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
+                                                    {set.items.map(item => (
+                                                        <div key={item.id} className="group relative p-5 bg-white rounded-3xl text-center border border-slate-100 flex flex-col items-center">
+                                                            <button onClick={() => handleDeleteItem(set.category, item.id)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14} /></button>
+                                                            <div className="text-4xl mb-2">{typeof item.icon === 'string' ? item.icon : '📦'}</div>
+                                                            <div className="text-xs font-black text-slate-600 truncate w-full">{item.name}</div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
