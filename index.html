@@ -29,7 +29,6 @@
     <script type="text/babel">
         const { useState, useEffect, useCallback, useRef } = React;
 
-        // 預設詞彙題庫
         const INITIAL_WORD_SETS = [
             { category: "客廳與居家", items: [
                 { id: 'l1', name: '電視', icon: '📺' }, { id: 'l2', name: '沙發', icon: '🛋️' }, { id: 'l3', name: '遙控器', icon: '🕹️' },
@@ -73,7 +72,6 @@
             { name: '灰色', color: '#94a3b8' }
         ];
 
-        // 簡單的圖示組件 (代替 Lucide 庫在 CDN 下的使用)
         const Icon = ({ name, size = 24, className = "" }) => {
             return <i data-lucide={name} style={{ width: size, height: size }} className={className}></i>;
         };
@@ -87,29 +85,54 @@
             const [selections, setSelections] = useState([]);
             const [distractorTask, setDistractorTask] = useState({ word: '', color: '', isMatch: false });
             const [showPool, setShowPool] = useState(false);
+            const [showAbortModal, setShowAbortModal] = useState(false); 
             const [lastFeedback, setLastFeedback] = useState(null);
             const [score, setScore] = useState(0);
             const [viewingRecord, setViewingRecord] = useState(null);
 
             const distractorHistory = useRef({ matchCount: 0, mismatchCount: 0 });
             const [timerLeft, setTimerLeft] = useState(0);
+            const [memoryStopwatch, setMemoryStopwatch] = useState(0); 
+            
             const [stats, setStats] = useState({
-                startTime: 0, endTime: 0, distractorTotal: 0, distractorCorrect: 0, distractorWrong: 0, reactionTimes: [], lastActionTime: 0
+                startTime: 0, endTime: 0, memoryTime: 0,
+                distractorTotal: 0, distractorCorrect: 0, distractorWrong: 0, 
+                reactionTimes: [], lastActionTime: 0
             });
 
             const [practiceHistory, setPracticeHistory] = useState([]);
             const [newItem, setNewItem] = useState({ name: '', category: '客廳與居家' });
 
             const [config, setConfig] = useState({
-                targetCount: 3, distractorMode: 'count', distractorTarget: 5, distractorDuration: 30, recallDistractorCount: 3, showIcons: true
+                targetCount: 3, distractorMode: 'count', distractorTarget: 5, distractorDuration: 30, recallDistractorCount: 3, showIcons: false
             });
 
             useEffect(() => {
-                // 每當畫面更新時渲染圖示
                 if (window.lucide) window.lucide.createIcons();
             });
 
             const updateConfig = (key, val) => setConfig(prev => ({ ...prev, [key]: val }));
+
+            const resetAllStates = () => {
+                setStage(STAGES.START);
+                setViewingRecord(null);
+                setTargets([]);
+                setSelections([]);
+                setOptions([]);
+                setLastFeedback(null);
+                setMemoryStopwatch(0);
+                setTimerLeft(0);
+                setStats({
+                    startTime: 0, endTime: 0, memoryTime: 0,
+                    distractorTotal: 0, distractorCorrect: 0, distractorWrong: 0, 
+                    reactionTimes: [], lastActionTime: 0
+                });
+                setShowAbortModal(false);
+            };
+
+            const confirmAbort = () => {
+                setShowAbortModal(true);
+            };
 
             const startGame = () => {
                 const availableCategories = wordLibrary.filter(c => c.items.length >= config.targetCount);
@@ -117,15 +140,43 @@
                 const randomSet = availableCategories[Math.floor(Math.random() * availableCategories.length)];
                 const shuffledItems = [...randomSet.items].sort(() => 0.5 - Math.random());
                 const targetItems = shuffledItems.slice(0, config.targetCount);
+                
                 setCurrentSet(randomSet);
                 setTargets(targetItems);
                 setSelections([]);
                 setLastFeedback(null);
                 setScore(0);
                 setViewingRecord(null);
-                setStats({ startTime: Date.now(), endTime: 0, distractorTotal: 0, distractorCorrect: 0, distractorWrong: 0, reactionTimes: [], lastActionTime: 0 });
+                setMemoryStopwatch(0); 
+                
+                setStats({ 
+                    startTime: Date.now(), 
+                    endTime: 0, 
+                    memoryTime: 0,
+                    distractorTotal: 0, 
+                    distractorCorrect: 0, 
+                    distractorWrong: 0, 
+                    reactionTimes: [], 
+                    lastActionTime: 0 
+                });
+                
                 distractorHistory.current = { matchCount: 0, mismatchCount: 0 };
                 setStage(STAGES.MEMORIZE);
+            };
+
+            useEffect(() => {
+                let mInterval;
+                if (stage === STAGES.MEMORIZE) {
+                    mInterval = setInterval(() => {
+                        setMemoryStopwatch(prev => prev + 1);
+                    }, 1000);
+                }
+                return () => clearInterval(mInterval);
+            }, [stage]);
+
+            const finishMemorize = () => {
+                setStats(prev => ({ ...prev, memoryTime: memoryStopwatch }));
+                setStage(STAGES.DISTRACT);
             };
 
             const nextDistractor = useCallback(() => {
@@ -247,9 +298,17 @@
                 score: score, targets: targets, stats: stats, config: config, selections: selections, date: new Date().toLocaleString()
             };
 
+            // 反應時間計算輔助 (ms -> s)
+            const getAverageReactionTime = (rTimes) => {
+                if (!rTimes || rTimes.length === 0) return "0.000";
+                const avgMs = rTimes.reduce((a, b) => a + b, 0) / rTimes.length;
+                return (avgMs / 1000).toFixed(3);
+            };
+
             return (
                 <div className="min-h-screen p-2 md:p-8">
                     <div className="max-w-3xl mx-auto bg-white rounded-[2.5rem] shadow-2xl overflow-hidden relative border border-slate-100">
+                        
                         {/* Header */}
                         <div className="bg-white border-b border-slate-100 p-6 flex justify-between items-center">
                             <div className="flex items-center gap-3">
@@ -262,6 +321,11 @@
                                 </div>
                             </div>
                             <div className="flex gap-2">
+                                {(stage === STAGES.MEMORIZE || stage === STAGES.DISTRACT || stage === STAGES.RECALL) && (
+                                    <button onClick={confirmAbort} className="flex items-center gap-2 bg-red-50 text-red-500 hover:bg-red-100 px-4 py-2.5 rounded-xl text-sm font-bold transition-all border border-red-100 mr-2 shadow-sm">
+                                        <Icon name="octagon-x" size={20} /> 中斷訓練
+                                    </button>
+                                )}
                                 <button onClick={() => setStage(STAGES.HISTORY)} className="p-2.5 bg-slate-50 text-slate-500 hover:bg-indigo-50 hover:text-indigo-600 rounded-xl transition-all border border-slate-100">
                                     <Icon name="history" size={22} />
                                 </button>
@@ -273,8 +337,8 @@
 
                         <div className="p-6 md:p-10">
                             {stage === STAGES.START && (
-                                <div className="animate-in fade-in zoom-in duration-500">
-                                    <div className="text-center mb-10">
+                                <div className="animate-in fade-in zoom-in duration-500 text-center">
+                                    <div className="mb-10">
                                         <div className="inline-block mb-4 px-4 py-1 bg-indigo-50 text-indigo-600 rounded-full text-sm font-black">DAILY TRAINING</div>
                                         <h2 className="text-4xl font-black text-slate-900 mb-2">準備開始訓練</h2>
                                         <p className="text-slate-400">客製化您的認知挑戰模式</p>
@@ -282,7 +346,7 @@
                                     <div className="space-y-4 mb-10 max-w-xl mx-auto">
                                         <div className="grid grid-cols-2 gap-4">
                                             <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center">
-                                                <div className="flex items-center gap-2 mb-4 text-indigo-500"><Icon name="target" size={20} /><span className="text-sm font-black text-slate-500">物品記憶</span></div>
+                                                <div className="flex items-center gap-2 mb-4 text-indigo-500"><Icon name="target" size={20} /><span className="text-sm font-black text-slate-500 uppercase">物品記憶</span></div>
                                                 <div className="flex items-center gap-5">
                                                     <button onClick={() => updateConfig('targetCount', Math.max(1, config.targetCount - 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="minus" size={18} /></button>
                                                     <span className="text-xl font-black min-w-[32px] text-center">{config.targetCount}</span>
@@ -290,7 +354,7 @@
                                                 </div>
                                             </div>
                                             <div className="bg-slate-50/50 p-6 rounded-[2.5rem] border-2 border-slate-100 flex flex-col items-center">
-                                                <div className="flex items-center gap-2 mb-4 text-amber-500"><Icon name="layers" size={20} /><span className="text-sm font-black text-slate-500">回憶混淆</span></div>
+                                                <div className="flex items-center gap-2 mb-4 text-amber-500"><Icon name="layers" size={20} /><span className="text-sm font-black text-slate-500 uppercase">回憶混淆</span></div>
                                                 <div className="flex items-center gap-5">
                                                     <button onClick={() => updateConfig('recallDistractorCount', Math.max(0, config.recallDistractorCount - 1))} className="w-10 h-10 rounded-2xl bg-white border border-slate-200 flex items-center justify-center text-slate-400 shadow-sm active:scale-90"><Icon name="minus" size={18} /></button>
                                                     <span className="text-xl font-black min-w-[32px] text-center">{config.recallDistractorCount}</span>
@@ -298,11 +362,12 @@
                                                 </div>
                                             </div>
                                         </div>
+
                                         <div className="bg-slate-50/50 p-6 rounded-[2rem] border-2 border-slate-100">
                                             <div className="flex justify-between items-center mb-5">
                                                 <div className="flex items-center gap-2"><Icon name="zap" size={18} className="text-indigo-600" /><span className="text-lg font-black text-slate-700">任務切換模式</span></div>
                                                 <div className="flex bg-slate-200 p-1 rounded-xl">
-                                                    <button onClick={() => updateConfig('distractorMode', 'count')} className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'count' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>次數達標</button>
+                                                    <button onClick={() => updateConfig('distractorMode', 'count')} className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'count' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-50'}`}>次數達標</button>
                                                     <button onClick={() => updateConfig('distractorMode', 'time')} className={`px-4 py-1.5 rounded-lg font-bold text-xs transition-all ${config.distractorMode === 'time' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`}>計時挑戰</button>
                                                 </div>
                                             </div>
@@ -329,8 +394,18 @@
                             )}
 
                             {stage === STAGES.MEMORIZE && (
-                                <div className="animate-in slide-in-from-right duration-500">
-                                    <div className="text-center mb-8"><h3 className="text-3xl font-black text-slate-900 mb-2">請記住以下物品</h3><div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full text-slate-500 font-bold text-sm"><Icon name="package" size={16}/> 當前類別：{currentSet.category}</div></div>
+                                <div className="animate-in slide-in-from-right duration-500 text-center">
+                                    <div className="mb-8">
+                                        <div className="inline-block px-6 py-2 bg-indigo-50 border-2 border-indigo-100 rounded-3xl mb-4 shadow-sm">
+                                            <div className="flex items-center gap-3 text-indigo-600 font-mono text-2xl font-black">
+                                                <Icon name="timer" /> {memoryStopwatch} 秒
+                                            </div>
+                                        </div>
+                                        <h3 className="text-3xl font-black text-slate-900 mb-2">第一階段：請記住以下物品</h3>
+                                        <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-slate-100 rounded-full text-slate-500 font-bold text-sm">
+                                            <Icon name="package" size={16}/> 當前類別：{currentSet?.category}
+                                        </div>
+                                    </div>
                                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-6 mb-12">
                                         {targets.map(item => (
                                             <div key={item.id} className="bg-white border-2 border-slate-100 rounded-[2.5rem] p-6 text-center shadow-sm flex flex-col items-center justify-center min-h-[180px]">
@@ -339,7 +414,9 @@
                                             </div>
                                         ))}
                                     </div>
-                                    <button onClick={() => setStage(STAGES.DISTRACT)} className="w-full bg-indigo-600 text-white text-2xl font-black py-6 rounded-[2rem] shadow-xl">記好了，進入「任務切換」挑戰</button>
+                                    <button onClick={finishMemorize} className="w-full bg-indigo-600 text-white text-2xl font-black py-6 rounded-[2rem] shadow-xl active:scale-95 transition-all">
+                                        記好了，進入下一個挑戰
+                                    </button>
                                 </div>
                             )}
 
@@ -351,21 +428,21 @@
                                         </div>
                                     </div>
                                     <h3 className="text-2xl font-black mb-8 text-slate-400 uppercase tracking-widest">文字內容 與 顏色 是否一致？</h3>
-                                    <div className={`mb-12 py-24 bg-white rounded-[4rem] border-4 transition-all relative ${lastFeedback === 'correct' ? 'border-green-400 bg-green-50/30' : lastFeedback === 'wrong' ? 'border-red-400 bg-red-50/30 shake' : 'border-slate-50'}`}>
+                                    <div className={`mb-12 py-24 bg-white rounded-[4rem] border-4 transition-all relative shadow-inner ${lastFeedback === 'correct' ? 'border-green-400 bg-green-50/30' : lastFeedback === 'wrong' ? 'border-red-400 bg-red-50/30 shake' : 'border-slate-50'}`}>
                                         <span className="text-[7.5rem] font-black tracking-widest" style={{ color: distractorTask.color }}>{distractorTask.word}</span>
-                                        {lastFeedback === 'correct' && <div className="absolute top-10 right-10 text-green-500"><Icon name="check-circle-2" size={64} /></div>}
-                                        {lastFeedback === 'wrong' && <div className="absolute top-10 right-10 text-red-500"><Icon name="x" size={64} /></div>}
+                                        {lastFeedback === 'correct' && <div className="absolute top-10 right-10 text-green-500 animate-in zoom-in"><Icon name="check-circle-2" size={64} /></div>}
+                                        {lastFeedback === 'wrong' && <div className="absolute top-10 right-10 text-red-500 animate-in zoom-in"><Icon name="x" size={64} /></div>}
                                     </div>
                                     <div className="grid grid-cols-2 gap-10 max-w-2xl mx-auto">
-                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(true)} className="bg-green-500 hover:bg-green-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg active:scale-95 disabled:opacity-50">是</button>
-                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(false)} className="bg-red-500 hover:bg-red-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg active:scale-95 disabled:opacity-50">否</button>
+                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(true)} className="bg-green-500 hover:bg-green-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg active:scale-95 disabled:opacity-50 transition-all">是</button>
+                                        <button disabled={lastFeedback !== null} onClick={() => handleDistractorAnswer(false)} className="bg-red-500 hover:bg-red-600 text-white py-10 rounded-[3rem] text-5xl font-black shadow-lg active:scale-95 disabled:opacity-50 transition-all">否</button>
                                     </div>
                                 </div>
                             )}
 
                             {stage === STAGES.RECALL && (
                                 <div className="animate-in fade-in duration-500 text-center">
-                                    <h3 className="text-3xl font-black text-slate-900 mb-8">延遲回憶挑戰：剛才記住了什麼？</h3>
+                                    <h3 className="text-3xl font-black text-slate-900 mb-8">第三階段：延遲回憶挑戰</h3>
                                     <div className="flex justify-center mb-10">
                                         <div className="px-10 py-4 bg-indigo-600 text-white rounded-[2rem] font-black text-3xl shadow-xl ring-8 ring-indigo-50">{selections.length} / {targets.length}</div>
                                     </div>
@@ -381,31 +458,32 @@
                                             );
                                         })}
                                     </div>
-                                    <button onClick={finishGame} disabled={selections.length < targets.length} className={`w-full py-6 rounded-[2.5rem] text-2xl font-black shadow-2xl ${selections.length < targets.length ? 'bg-slate-200 text-slate-400' : 'bg-slate-900 text-white'}`}>{selections.length < targets.length ? `還差 ${targets.length - selections.length} 個答案` : '完成訓練，查看分析報告'}</button>
+                                    <button onClick={finishGame} disabled={selections.length < targets.length} className={`w-full py-6 rounded-[2.5rem] text-2xl font-black shadow-2xl active:scale-95 transition-all ${selections.length < targets.length ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-black'}`}>{selections.length < targets.length ? `還差 ${targets.length - selections.length} 個答案` : '完成訓練，查看分析報告'}</button>
                                 </div>
                             )}
 
                             {stage === STAGES.RESULT && (
-                                <div className="animate-in zoom-in duration-500">
-                                    <div className="text-center mb-10">
+                                <div className="animate-in zoom-in duration-500 text-center">
+                                    <div className="mb-10">
                                         <div className="inline-block p-4 bg-slate-50 border rounded-3xl text-indigo-600 mb-4 shadow-sm"><Icon name="file-text" size={40}/></div>
                                         <h3 className="text-4xl font-black text-slate-900">訓練報告</h3>
                                         <p className="text-slate-400 font-bold">{currentDisplay.date}</p>
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
-                                        <div className="bg-white rounded-[3rem] p-10 border-2 border-slate-50 shadow-sm text-center">
+                                        <div className="bg-white rounded-[3rem] p-10 border-2 border-slate-50 shadow-sm text-center flex flex-col justify-center">
                                             <p className="text-slate-400 font-black mb-2 uppercase text-sm">回憶準確率</p>
                                             <div className="text-[6rem] font-black text-slate-900 leading-none mb-6">{Math.round((currentDisplay.score / currentDisplay.targets.length) * 100)}<span className="text-2xl ml-1">%</span></div>
                                             <div className="flex justify-center gap-3">{currentDisplay.targets.map((t, idx) => (<div key={idx} className={`w-4 h-4 rounded-full ${currentDisplay.selections.some(s => s.id === t.id) ? 'bg-green-500' : 'bg-red-400'}`}></div>))}</div>
                                         </div>
-                                        <div className="bg-indigo-600 rounded-[3rem] p-10 text-white shadow-xl space-y-5">
-                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>挑戰模式</span><span className="font-bold">{currentDisplay.config.distractorMode === 'count' ? '次數達標' : '計時挑戰'}</span></div>
-                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>正確率</span><span className="font-bold">{Math.round((currentDisplay.stats.distractorCorrect / currentDisplay.stats.distractorTotal) * 100 || 0)}%</span></div>
-                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>反應時間</span><span className="font-bold">{Math.round(currentDisplay.stats.reactionTimes.reduce((a,b)=>a+b,0)/currentDisplay.stats.reactionTimes.length || 0)} ms</span></div>
+                                        <div className="bg-indigo-600 rounded-[3rem] p-10 text-white shadow-xl space-y-5 flex flex-col justify-center text-left">
+                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>1. 物品記憶耗時</span><span className="font-bold text-xl">{currentDisplay.stats.memoryTime} 秒</span></div>
+                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>2. 干擾答對題數</span><span className="font-bold text-xl">{currentDisplay.stats.distractorCorrect} 題</span></div>
+                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>任務正確率</span><span className="font-bold">{Math.round((currentDisplay.stats.distractorCorrect / currentDisplay.stats.distractorTotal) * 100 || 0)}%</span></div>
+                                            <div className="flex justify-between border-b border-indigo-500/30 pb-2"><span>平均反應時間</span><span className="font-bold">{getAverageReactionTime(currentDisplay.stats.reactionTimes)} 秒</span></div>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-50 rounded-[2.5rem] p-8 mb-10">
-                                        <div className="font-black text-slate-800 mb-6 px-2">記憶物件清單</div>
+                                    <div className="bg-slate-50 rounded-[2.5rem] p-8 mb-10 text-left">
+                                        <div className="font-black text-slate-800 mb-6 px-2">記憶物件清單 (目標項)</div>
                                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                                             {currentDisplay.targets.map(t => (
                                                 <div key={t.id} className="flex items-center gap-3 px-5 py-4 bg-white rounded-2xl border border-slate-100 shadow-sm">
@@ -417,26 +495,26 @@
                                         </div>
                                     </div>
                                     <div className="flex gap-4">
-                                        <button onClick={() => { setViewingRecord(null); setStage(STAGES.START); }} className="flex-1 bg-slate-900 text-white py-6 rounded-3xl text-xl font-black shadow-xl active:scale-95">回到主畫面</button>
-                                        <button onClick={() => setStage(STAGES.HISTORY)} className="flex-1 bg-white border-2 border-slate-100 text-slate-600 py-6 rounded-3xl text-xl font-black shadow-md">歷史成績</button>
+                                        <button onClick={() => { setViewingRecord(null); setStage(STAGES.START); }} className="flex-1 bg-slate-900 text-white py-6 rounded-3xl text-xl font-black shadow-xl active:scale-95 transition-all">回到主畫面</button>
+                                        <button onClick={() => setStage(STAGES.HISTORY)} className="flex-1 bg-white border-2 border-slate-100 text-slate-600 py-6 rounded-3xl text-xl font-black shadow-md transition-all">歷史成績</button>
                                     </div>
                                 </div>
                             )}
 
                             {stage === STAGES.HISTORY && (
                                 <div className="animate-in fade-in duration-400">
-                                    <div className="flex justify-between items-center mb-10"><h3 className="text-3xl font-black text-slate-900">訓練歷史紀錄</h3><button onClick={() => setStage(STAGES.START)}><Icon name="x" size={36} className="text-slate-400"/></button></div>
+                                    <div className="flex justify-between items-center mb-10"><h3 className="text-3xl font-black text-slate-900 flex items-center gap-4"><Icon name="history" size={32} className="text-indigo-600" /> 訓練歷史紀錄</h3><button onClick={() => setStage(STAGES.START)}><Icon name="x" size={36} className="text-slate-400 hover:text-slate-600 transition-colors"/></button></div>
                                     <div className="space-y-4 max-h-[500px] overflow-y-auto pr-3 custom-scrollbar">
                                         {practiceHistory.length === 0 ? <div className="text-center py-24 bg-slate-50 rounded-[3rem] border-2 border-dashed border-slate-200 text-slate-400 font-black">目前尚無數據</div> : 
                                             practiceHistory.map(record => (
-                                                <button key={record.id} onClick={() => showHistoryRecord(record)} className="w-full bg-white border-2 border-slate-50 p-6 rounded-[2rem] flex justify-between items-center hover:border-indigo-300 transition-all text-left shadow-sm">
-                                                    <div><div className="text-xs font-black text-slate-300 uppercase">{record.date}</div><div className="text-xl font-black text-slate-800">記憶 {record.config.targetCount} 項挑戰</div></div>
-                                                    <div className="flex items-center gap-6"><div className="text-right"><div className="text-4xl font-black text-indigo-600">{Math.round((record.stats.finalScore / record.config.targetCount) * 100)}%</div></div><Icon name="chevron-right" className="text-slate-200" size={28} /></div>
+                                                <button key={record.id} onClick={() => showHistoryRecord(record)} className="w-full bg-white border-2 border-slate-50 p-6 rounded-[2rem] flex justify-between items-center hover:border-indigo-300 transition-all text-left shadow-sm group">
+                                                    <div><div className="text-xs font-black text-slate-300 uppercase">{record.date}</div><div className="text-xl font-black text-slate-800 group-hover:text-indigo-700 transition-colors">記憶 {record.config.targetCount} 項挑戰</div><div className="text-sm text-slate-400">記憶耗時：{record.stats.memoryTime} 秒</div></div>
+                                                    <div className="flex items-center gap-6"><div className="text-right"><div className="text-4xl font-black text-indigo-600">{Math.round((record.stats.finalScore / record.config.targetCount) * 100)}%</div></div><Icon name="chevron-right" className="text-slate-200 group-hover:text-indigo-400 transition-all" size={28} /></div>
                                                 </button>
                                             ))
                                         }
                                     </div>
-                                    <button onClick={() => setStage(STAGES.START)} className="w-full mt-10 bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xl">回到主頁</button>
+                                    <button onClick={() => setStage(STAGES.START)} className="w-full mt-10 bg-slate-900 text-white py-6 rounded-[2rem] font-black text-xl hover:bg-black transition-all">回到主畫面</button>
                                 </div>
                             )}
                         </div>
@@ -449,25 +527,42 @@
                                 <div className="flex items-center gap-1"><Icon name="eye" size={12}/> Cognitive</div>
                             </div>
                             <div className="text-slate-400 text-xs font-bold border-t border-slate-200 pt-4 w-full text-center">
-                                設計：<a href="https://www.facebook.com/mpotkevin" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 transition-colors underline decoration-indigo-200 underline-offset-4 decoration-2">職能治療師 - 鄭凱文</a>
+                                設計：<a href="https://www.facebook.com/mpotkevin" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:text-indigo-800 transition-colors underline decoration-indigo-200 underline-offset-4 decoration-2 font-bold uppercase tracking-tight">職能治療師 - 鄭凱文</a>
                             </div>
                         </div>
+
+                        {/* 自定義中斷確認彈窗 */}
+                        {showAbortModal && (
+                            <div className="absolute inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm p-4 flex items-center justify-center animate-in fade-in duration-200">
+                                <div className="bg-white rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl text-center border-2 border-red-50 animate-in zoom-in duration-300">
+                                    <div className="w-20 h-20 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
+                                        <Icon name="alert-triangle" size={40} />
+                                    </div>
+                                    <h4 className="text-2xl font-black text-slate-800 mb-4">確定要中斷嗎？</h4>
+                                    <p className="text-slate-500 mb-8 font-medium">中斷後目前的訓練進度將會遺失。</p>
+                                    <div className="flex gap-4">
+                                        <button onClick={() => setShowAbortModal(false)} className="flex-1 py-4 bg-slate-100 text-slate-600 rounded-2xl font-black hover:bg-slate-200 transition-all">繼續訓練</button>
+                                        <button onClick={resetAllStates} className="flex-1 py-4 bg-red-500 text-white rounded-2xl font-black shadow-lg shadow-red-100 hover:bg-red-600 transition-all">確定中斷</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* 題庫彈窗 */}
                         {showPool && (
                             <div className="absolute inset-0 z-50 bg-slate-900/80 backdrop-blur-xl p-4 flex items-center justify-center">
-                                <div className="bg-white w-full max-h-[92%] rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col">
+                                <div className="bg-white w-full max-h-[92%] rounded-[3.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in duration-300">
                                     <div className="p-8 bg-slate-50 border-b flex justify-between items-center">
-                                        <div className="flex items-center gap-4"><div className="p-3 bg-white rounded-2xl text-indigo-600"><Icon name="package" size={28} /></div><div><h4 className="text-2xl font-black">訓練題庫管理</h4></div></div>
-                                        <button onClick={() => setShowPool(false)} className="text-slate-400"><Icon name="x" size={32} /></button>
+                                        <div className="flex items-center gap-4"><div className="p-3 bg-white rounded-2xl text-indigo-600 shadow-sm"><Icon name="package" size={28} /></div><div><h4 className="text-2xl font-black text-slate-900">訓練題庫管理</h4></div></div>
+                                        <button onClick={() => setShowPool(false)} className="text-slate-400 hover:text-slate-600 transition-colors"><Icon name="x" size={32} /></button>
                                     </div>
                                     <div className="p-8 bg-white border-b">
                                         <form onSubmit={handleAddNewItem} className="flex gap-4">
-                                            <input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="例如：放大鏡..." className="flex-1 p-4 border-2 border-slate-50 rounded-2xl font-bold bg-slate-50/50 outline-none focus:border-indigo-400" />
-                                            <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="p-4 border-2 border-slate-50 rounded-2xl font-bold bg-slate-50/50 text-slate-600">
+                                            <input type="text" value={newItem.name} onChange={e => setNewItem({...newItem, name: e.target.value})} placeholder="例如：放大鏡..." className="flex-1 p-4 border-2 border-slate-100 rounded-2xl font-bold bg-slate-50/50 outline-none focus:border-indigo-400 transition-all shadow-inner" />
+                                            <select value={newItem.category} onChange={e => setNewItem({...newItem, category: e.target.value})} className="p-4 border-2 border-slate-100 rounded-2xl font-bold bg-slate-50/50 text-slate-600 outline-none focus:border-indigo-400 transition-all">
                                                 {wordLibrary.map(cat => <option key={cat.category} value={cat.category}>{cat.category}</option>)}
                                             </select>
-                                            <button type="submit" className="bg-slate-900 text-white px-8 rounded-2xl font-black">新增</button>
+                                            <button type="submit" className="bg-slate-900 text-white px-8 rounded-2xl font-black hover:bg-black transition-all active:scale-95 shadow-lg">新增</button>
                                         </form>
                                     </div>
                                     <div className="p-8 overflow-y-auto space-y-12 bg-slate-50/20 custom-scrollbar">
@@ -476,8 +571,8 @@
                                                 <h5 className="font-black text-slate-900 mb-6 flex items-center gap-3 text-xl"><div className="w-2.5 h-6 bg-indigo-500 rounded-full"></div>{set.category}</h5>
                                                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-4">
                                                     {set.items.map(item => (
-                                                        <div key={item.id} className="group relative p-5 bg-white rounded-3xl text-center border border-slate-100 flex flex-col items-center">
-                                                            <button onClick={() => handleDeleteItem(set.category, item.id)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity"><Icon name="trash-2" size={14} /></button>
+                                                        <div key={item.id} className="group relative p-5 bg-white rounded-3xl text-center border border-slate-100 flex flex-col items-center shadow-sm hover:border-red-200 transition-all">
+                                                            <button onClick={() => handleDeleteItem(set.category, item.id)} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-2 opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:scale-110 active:scale-90"><Icon name="trash-2" size={14} /></button>
                                                             <div className="text-4xl mb-2">{typeof item.icon === 'string' ? item.icon : '📦'}</div>
                                                             <div className="text-xs font-black text-slate-600 truncate w-full">{item.name}</div>
                                                         </div>
